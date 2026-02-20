@@ -2,54 +2,70 @@
 
 LocalNest is a local MCP server for code context.
 
-It lets AI tools search your local projects safely using a simple flow:
+It helps AI tools retrieve focused code context with a simple flow:
 
-1. find projects
+1. list projects
 2. search code
 3. fetch exact snippets
 
-## Quick Start
+## Fastest Way (No Build Required)
 
-## 1) Build
-
-```bash
-cd localnest
-./tool/build_exe.sh
-```
-
-## 2) Setup
-
-Single root:
+## 1) Install CLI from pub.dev
 
 ```bash
-./build/localnest --setup --name scripts --root /absolute/path/to/Scripts
+dart pub global activate localnest
 ```
 
-Large parent root (recommended): split into many project aliases:
+## 2) Setup config
 
 ```bash
-./build/localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects
+localnest --setup
 ```
 
-Optional vector placeholders in config:
+`--setup` now auto-uses your current directory and infers project name.
+Use explicit values only when needed:
 
 ```bash
-./build/localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects --enable-vector-bootstrap
+localnest --setup --name scripts --root /absolute/path/to/Scripts
 ```
 
-## 3) Health Check
+Large parent root (recommended): split into project aliases:
 
 ```bash
-./build/localnest --doctor
+localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects
 ```
 
-## 4) Add to MCP config
+Optional vector placeholders:
+
+```bash
+localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects --enable-vector-bootstrap
+```
+
+## 3) Health check
+
+```bash
+localnest --doctor
+```
+
+## 4) Inspect config
+
+```bash
+localnest --config
+```
+
+This prints:
+- resolved config file path
+- whether file exists
+- whether config is valid
+- repair command if config is broken
+
+## 5) Add to MCP config
 
 ```json
 {
   "mcpServers": {
     "localnest": {
-      "command": "/absolute/path/to/localnest/build/localnest",
+      "command": "localnest",
       "args": [
         "--config",
         "/absolute/path/to/localnest.config.json"
@@ -59,9 +75,108 @@ Optional vector placeholders in config:
 }
 ```
 
-## 5) Run
+## Production Configuration (Required)
+
+Use this exact structure in production.
+
+Valid MCP block:
+
+```json
+{
+  "mcpServers": {
+    "localnest": {
+      "command": "/home/wmt-tushar/.pub-cache/bin/localnest",
+      "args": [
+        "--config",
+        "/home/wmt-tushar/.localnest/config.json"
+      ]
+    }
+  }
+}
+```
+
+Do not do this:
+
+```json
+{
+  "mcpServers": {
+    "localnest": {
+      "command": "/home/wmt-tushar/.localnest"
+    }
+  }
+}
+```
+
+Reason: `command` must be an executable, not a directory.
+
+Required config file (`/home/wmt-tushar/.localnest/config.json`) example:
+
+```json
+{
+  "exposeProjectRoots": false,
+  "allowBroadRoots": false,
+  "maxConcurrentSearches": 4,
+  "searchTimeoutMs": 8000,
+  "searchCacheTtlSeconds": 20,
+  "searchCacheMaxEntries": 200,
+  "projects": [
+    {
+      "name": "prod",
+      "root": "/absolute/path/to/real/project"
+    }
+  ],
+  "denyPatterns": [
+    ".env",
+    ".pem",
+    ".key",
+    "secrets/",
+    "node_modules/",
+    ".git/",
+    "build/",
+    "dist/",
+    "coverage/"
+  ],
+  "vector": {
+    "enabled": false
+  }
+}
+```
+
+## Run From Source (Also No Build)
 
 ```bash
+cd localnest
+dart pub get
+dart run localnest --setup --name scripts --root /absolute/path/to/Scripts
+dart run localnest --doctor
+dart run localnest --config /absolute/path/to/localnest.config.json
+```
+
+MCP config for source mode:
+
+```json
+{
+  "mcpServers": {
+    "localnest": {
+      "command": "dart",
+      "args": [
+        "run",
+        "/absolute/path/to/localnest/bin/localnest.dart",
+        "--config",
+        "/absolute/path/to/localnest.config.json"
+      ]
+    }
+  }
+}
+```
+
+## Optional: Native Binary Build
+
+Only needed if you want a standalone binary with faster startup.
+
+```bash
+cd localnest
+./tool/build_exe.sh
 ./build/localnest --config /absolute/path/to/localnest.config.json
 ```
 
@@ -90,11 +205,12 @@ Result metadata:
 
 | Command | What it does |
 |---|---|
-| `--setup` | Create/update config and add project |
+| `--setup` | Create/update config (defaults to current directory) |
 | `--split-projects` | Discover subprojects under root |
 | `--enable-vector-bootstrap` | Add vector config placeholders |
 | `--doctor` | Check `dart`, `git`, `rg` and show install hints |
-| `--config <path>` | Use explicit config file |
+| `--config` | Inspect default config path and validity |
+| `--config <path>` | Use explicit config path (inspect/manual run) |
 
 ## Minimal Config
 
@@ -142,6 +258,31 @@ Result metadata:
 4. Tune `searchTimeoutMs` and `maxConcurrentSearches` per machine.
 
 ## Troubleshooting
+
+### `localnest` command not found
+
+- ensure Dart global bin is on PATH
+- usually: `$HOME/.pub-cache/bin`
+
+### `fork/exec /home/.../.localnest: permission denied`
+
+- your MCP `command` is pointing to a directory
+- set `command` to `localnest` or `/home/<user>/.pub-cache/bin/localnest`
+
+### `No valid projects found in config`
+
+- `projects[]` is empty, invalid, or paths do not exist for current user
+- validate quickly:
+
+```bash
+localnest --config
+```
+
+- fix by re-running setup with a real path:
+
+```bash
+localnest --setup --name prod --root /absolute/path/to/real/project --config /home/wmt-tushar/.localnest/config.json
+```
 
 ### Search is slow
 
