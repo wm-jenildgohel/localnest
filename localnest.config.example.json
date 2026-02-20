@@ -1,0 +1,23 @@
+{
+  "exposeProjectRoots": false,
+  "allowBroadRoots": false,
+  "maxConcurrentSearches": 4,
+  "searchTimeoutMs": 8000,
+  "searchCacheTtlSeconds": 20,
+  "searchCacheMaxEntries": 200,
+  "projects": [
+    { "name": "scripts", "root": "/absolute/path/to/Scripts" },
+    { "name": "mobile_app", "root": "/absolute/path/to/mobile-app" }
+  ],
+  "denyPatterns": [
+    ".env",
+    ".pem",
+    ".key",
+    "secrets/",
+    "node_modules/",
+    ".git/",
+    "build/",
+    "dist/",
+    "coverage/"
+  ]
+}
