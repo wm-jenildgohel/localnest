@@ -159,21 +159,25 @@ class LocalNestTools {
         'query': query,
         'count': cached.length,
         'matches': cached,
-        'meta': {'cacheHit': true, 'backend': 'cache'},
+        'meta': {'cacheHit': true, 'backend': 'cache', 'partial': false},
       });
     }
 
-    final chunks = await _searchAcrossProjects(
+    final deadline = DateTime.now().add(
+      Duration(milliseconds: _config.searchTimeoutMs),
+    );
+    final aggregate = await _searchAcrossProjects(
       projects: projects,
       query: query,
       caseSensitive: caseSensitive,
       maxResults: maxResults,
+      deadline: deadline,
     );
 
     final matches = <Map<String, dynamic>>[];
     final backends = <String>{};
 
-    for (final chunk in chunks) {
+    for (final chunk in aggregate.chunks) {
       backends.add(chunk.backend);
       for (final item in chunk.matches) {
         matches.add(item);
@@ -188,31 +192,51 @@ class LocalNestTools {
       'query': query,
       'count': matches.length,
       'matches': matches,
-      'meta': {'cacheHit': false, 'backends': backends.toList()..sort()},
+      'meta': {
+        'cacheHit': false,
+        'backends': backends.toList()..sort(),
+        'partial': aggregate.partial,
+      },
     });
   }
 
-  Future<List<_ProjectSearchChunk>> _searchAcrossProjects({
+  Future<_SearchAggregate> _searchAcrossProjects({
     required List<ProjectConfig> projects,
     required String query,
     required bool caseSensitive,
     required int maxResults,
+    required DateTime deadline,
   }) async {
     final concurrency = _config.maxConcurrentSearches.clamp(1, 16);
     final output = List<_ProjectSearchChunk?>.filled(projects.length, null);
 
     var nextIndex = 0;
+    var collected = 0;
+    var partial = false;
+
     Future<void> worker() async {
       while (true) {
+        if (DateTime.now().isAfter(deadline)) {
+          partial = true;
+          return;
+        }
+        if (collected >= maxResults) return;
         if (nextIndex >= projects.length) return;
+
         final i = nextIndex;
         nextIndex += 1;
-        output[i] = await _searchSingleProject(
+
+        final chunk = await _searchSingleProject(
           projects[i],
           query: query,
           caseSensitive: caseSensitive,
           maxResults: maxResults,
+          deadline: deadline,
         );
+
+        output[i] = chunk;
+        collected += chunk.matches.length;
+        if (chunk.timedOut) partial = true;
       }
     }
 
@@ -222,7 +246,10 @@ class LocalNestTools {
     }
     await Future.wait(workers);
 
-    return output.whereType<_ProjectSearchChunk>().toList();
+    return _SearchAggregate(
+      chunks: output.whereType<_ProjectSearchChunk>().toList(),
+      partial: partial || DateTime.now().isAfter(deadline),
+    );
   }
 
   Future<_ProjectSearchChunk> _searchSingleProject(
@@ -230,14 +257,27 @@ class LocalNestTools {
     required String query,
     required bool caseSensitive,
     required int maxResults,
+    required DateTime deadline,
   }) async {
+    if (DateTime.now().isAfter(deadline)) {
+      return const _ProjectSearchChunk(
+        matches: [],
+        backend: 'deadline_exceeded',
+        timedOut: true,
+      );
+    }
+
     if (await _hasRg()) {
-      return _searchWithRipgrep(
+      final rgResult = await _searchWithRipgrep(
         project,
         query: query,
         caseSensitive: caseSensitive,
         maxResults: maxResults,
+        deadline: deadline,
       );
+      if (rgResult.backend == 'ripgrep') {
+        return rgResult;
+      }
     }
 
     if (await _hasGit()) {
@@ -248,6 +288,7 @@ class LocalNestTools {
           query: query,
           caseSensitive: caseSensitive,
           maxResults: maxResults,
+          deadline: deadline,
         );
         if (gitResult.backend == 'gitgrep') {
           return gitResult;
@@ -260,6 +301,7 @@ class LocalNestTools {
       query: query,
       caseSensitive: caseSensitive,
       maxResults: maxResults,
+      deadline: deadline,
     );
   }
 
@@ -268,7 +310,17 @@ class LocalNestTools {
     required String query,
     required bool caseSensitive,
     required int maxResults,
+    required DateTime deadline,
   }) async {
+    final remainingMs = _remainingMs(deadline);
+    if (remainingMs <= 0) {
+      return const _ProjectSearchChunk(
+        matches: [],
+        backend: 'ripgrep_timeout',
+        timedOut: true,
+      );
+    }
+
     final rgArgs = <String>[
       '--json',
       '--fixed-strings',
@@ -293,7 +345,7 @@ class LocalNestTools {
     ProcessResult result;
     try {
       result = await Process.run('rg', rgArgs).timeout(
-        Duration(milliseconds: _config.searchTimeoutMs),
+        Duration(milliseconds: remainingMs),
         onTimeout: () => ProcessResult(0, -1, '', 'timeout'),
       );
     } on ProcessException {
@@ -301,7 +353,11 @@ class LocalNestTools {
       return const _ProjectSearchChunk(matches: [], backend: 'rg_missing');
     }
     if (result.exitCode == -1) {
-      return const _ProjectSearchChunk(matches: [], backend: 'ripgrep_timeout');
+      return const _ProjectSearchChunk(
+        matches: [],
+        backend: 'ripgrep_timeout',
+        timedOut: true,
+      );
     }
 
     final lines = const LineSplitter().convert(
@@ -350,7 +406,17 @@ class LocalNestTools {
     required String query,
     required bool caseSensitive,
     required int maxResults,
+    required DateTime deadline,
   }) async {
+    final remainingMs = _remainingMs(deadline);
+    if (remainingMs <= 0) {
+      return const _ProjectSearchChunk(
+        matches: [],
+        backend: 'gitgrep_timeout',
+        timedOut: true,
+      );
+    }
+
     final args = <String>[
       '-C',
       project.root,
@@ -366,7 +432,7 @@ class LocalNestTools {
     ProcessResult result;
     try {
       result = await Process.run('git', args).timeout(
-        Duration(milliseconds: _config.searchTimeoutMs),
+        Duration(milliseconds: remainingMs),
         onTimeout: () => ProcessResult(0, -1, '', 'timeout'),
       );
     } on ProcessException {
@@ -374,10 +440,13 @@ class LocalNestTools {
       return const _ProjectSearchChunk(matches: [], backend: 'git_missing');
     }
     if (result.exitCode == -1) {
-      return const _ProjectSearchChunk(matches: [], backend: 'gitgrep_timeout');
+      return const _ProjectSearchChunk(
+        matches: [],
+        backend: 'gitgrep_timeout',
+        timedOut: true,
+      );
     }
 
-    // git grep exits with 1 when no matches.
     final out = (result.stdout ?? '').toString();
     if (result.exitCode > 1) {
       return const _ProjectSearchChunk(matches: [], backend: 'gitgrep_error');
@@ -414,55 +483,68 @@ class LocalNestTools {
     required String query,
     required bool caseSensitive,
     required int maxResults,
+    required DateTime deadline,
   }) async {
     final matches = <Map<String, dynamic>>[];
     final needle = caseSensitive ? query : query.toLowerCase();
-    final deadline = DateTime.now().add(
-      Duration(milliseconds: _config.searchTimeoutMs),
-    );
     var scannedFiles = 0;
+    var timedOut = false;
 
-    await for (final entity in Directory(
-      project.root,
-    ).list(recursive: true, followLinks: false)) {
-      if (matches.length >= maxResults) break;
-      if (DateTime.now().isAfter(deadline)) break;
-      if (entity is! File) continue;
-      scannedFiles += 1;
-      if (scannedFiles > _maxFallbackFilesScanned) break;
-
-      final rel = _safeRelative(project.root, entity.path);
-      if (rel == null || _isDenied(rel)) continue;
-
-      FileStat stat;
-      try {
-        stat = await entity.stat();
-      } catch (_) {
-        continue;
-      }
-      if (stat.size > _maxFileSizeBytes) continue;
-
-      List<String> lines;
-      try {
-        lines = await entity.readAsLines();
-      } catch (_) {
-        continue;
-      }
-
-      for (var i = 0; i < lines.length; i++) {
-        final candidate = caseSensitive ? lines[i] : lines[i].toLowerCase();
-        if (!candidate.contains(needle)) continue;
-        matches.add({
-          'project': project.name,
-          'path': rel,
-          'line': i + 1,
-          'preview': _truncatePreview(lines[i]),
-        });
+    try {
+      await for (final entity in Directory(
+        project.root,
+      ).list(recursive: true, followLinks: false)) {
         if (matches.length >= maxResults) break;
+        if (DateTime.now().isAfter(deadline)) {
+          timedOut = true;
+          break;
+        }
+        if (entity is! File) continue;
+        scannedFiles += 1;
+        if (scannedFiles > _maxFallbackFilesScanned) {
+          timedOut = true;
+          break;
+        }
+
+        final rel = _safeRelative(project.root, entity.path);
+        if (rel == null || _isDenied(rel)) continue;
+
+        FileStat stat;
+        try {
+          stat = await entity.stat();
+        } catch (_) {
+          continue;
+        }
+        if (stat.size > _maxFileSizeBytes) continue;
+
+        List<String> lines;
+        try {
+          lines = await entity.readAsLines();
+        } catch (_) {
+          continue;
+        }
+
+        for (var i = 0; i < lines.length; i++) {
+          final candidate = caseSensitive ? lines[i] : lines[i].toLowerCase();
+          if (!candidate.contains(needle)) continue;
+          matches.add({
+            'project': project.name,
+            'path': rel,
+            'line': i + 1,
+            'preview': _truncatePreview(lines[i]),
+          });
+          if (matches.length >= maxResults) break;
+        }
       }
+    } catch (_) {
+      timedOut = true;
     }
 
-    return _ProjectSearchChunk(matches: matches, backend: 'dart_scan');
+    return _ProjectSearchChunk(
+      matches: matches,
+      backend: 'dart_scan',
+      timedOut: timedOut,
+    );
   }
 
   Future<bool> _hasRg() async {
@@ -603,24 +685,28 @@ class LocalNestTools {
     Future<void> walk(Directory dir, int depth) async {
       if (depth > maxDepth || entries.length >= maxEntries) return;
 
-      final stream = dir.list(followLinks: false);
-      await for (final entity in stream) {
-        if (entries.length >= maxEntries) break;
+      try {
+        final stream = dir.list(followLinks: false);
+        await for (final entity in stream) {
+          if (entries.length >= maxEntries) break;
 
-        final rel = _safeRelative(project.root, entity.path);
-        if (rel == null || rel == '.') continue;
-        if (_isDenied(rel)) continue;
+          final rel = _safeRelative(project.root, entity.path);
+          if (rel == null || rel == '.') continue;
+          if (_isDenied(rel)) continue;
 
-        final isDir = entity is Directory;
-        entries.add({
-          'path': rel,
-          'type': isDir ? 'dir' : 'file',
-          'depth': rel.split('/').length,
-        });
+          final isDir = entity is Directory;
+          entries.add({
+            'path': rel,
+            'type': isDir ? 'dir' : 'file',
+            'depth': rel.split('/').length,
+          });
 
-        if (isDir && depth < maxDepth) {
-          await walk(entity, depth + 1);
+          if (isDir && depth < maxDepth) {
+            await walk(entity, depth + 1);
+          }
         }
+      } catch (_) {
+        // Skip unreadable directories.
       }
     }
 
@@ -750,6 +836,11 @@ class LocalNestTools {
         : text;
   }
 
+  int _remainingMs(DateTime deadline) {
+    final ms = deadline.difference(DateTime.now()).inMilliseconds;
+    return ms < 0 ? 0 : ms;
+  }
+
   Map<String, dynamic> _ok(Map<String, dynamic> data) => {
     'isError': false,
     'structuredContent': data,
@@ -778,8 +869,20 @@ class _SearchCacheEntry {
 }
 
 class _ProjectSearchChunk {
-  const _ProjectSearchChunk({required this.matches, required this.backend});
+  const _ProjectSearchChunk({
+    required this.matches,
+    required this.backend,
+    this.timedOut = false,
+  });
 
   final List<Map<String, dynamic>> matches;
   final String backend;
+  final bool timedOut;
+}
+
+class _SearchAggregate {
+  const _SearchAggregate({required this.chunks, required this.partial});
+
+  final List<_ProjectSearchChunk> chunks;
+  final bool partial;
 }

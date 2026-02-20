@@ -1,6 +1,8 @@
 ## 0.1.0-beta.1
 
 - Marked package/server version as beta prerelease
+- Added setup flags for project sharding (`--split-projects`) and vector bootstrap config (`--enable-vector-bootstrap`)
+- Improved search resilience with deadline-aware partial results and fallback chain hardening
 
 ## 0.1.0
 

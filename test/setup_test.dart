@@ -69,6 +69,34 @@ void main() {
       expect((projects.first['root'] as String).contains('project2'), isTrue);
     });
 
+    test('split-projects discovery and vector bootstrap', () async {
+      final flutterA = Directory('${tempDir.path}/Flutter/app_a')
+        ..createSync(recursive: true);
+      final flutterB = Directory('${tempDir.path}/Flutter/app_b')
+        ..createSync(recursive: true);
+      File('${flutterA.path}/pubspec.yaml').writeAsStringSync('name: a');
+      File('${flutterB.path}/pubspec.yaml').writeAsStringSync('name: b');
+
+      final configPath = '${tempDir.path}/config_split.json';
+      await setupLocalNest(
+        configPath: configPath,
+        projectName: 'flutter',
+        projectRoot: '${tempDir.path}/Flutter',
+        splitProjects: true,
+        enableVectorBootstrap: true,
+      );
+
+      final data =
+          jsonDecode(await File(configPath).readAsString())
+              as Map<String, dynamic>;
+      final projects = (data['projects'] as List).cast<Map<String, dynamic>>();
+      expect(
+        projects.any((p) => '${p['name']}'.startsWith('flutter_')),
+        isTrue,
+      );
+      expect(data['vector']['enabled'], isTrue);
+    });
+
     test('throws for missing root', () async {
       final configPath = '${tempDir.path}/config3.json';
       expect(

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 class SetupResult {
   const SetupResult({
     required this.configPath,
@@ -17,6 +19,9 @@ Future<SetupResult> setupLocalNest({
   String? configPath,
   required String projectName,
   required String projectRoot,
+  bool splitProjects = false,
+  int maxDiscoveredProjects = 150,
+  bool enableVectorBootstrap = false,
 }) async {
   final normalizedName = projectName.trim();
   if (normalizedName.isEmpty) {
@@ -76,19 +81,38 @@ Future<SetupResult> setupLocalNest({
   json['denyPatterns'] = deny;
 
   final projects = _normalizeProjects(json['projects']);
-  var replaced = false;
-  for (var i = 0; i < projects.length; i++) {
-    final item = projects[i];
-    if (item['name'] == normalizedName) {
-      projects[i] = {'name': normalizedName, 'root': resolvedRoot};
-      replaced = true;
-      break;
+  if (splitProjects) {
+    final discovered = await _discoverProjectRoots(
+      parentRoot: resolvedRoot,
+      maxProjects: maxDiscoveredProjects,
+    );
+    for (final d in discovered) {
+      final name = '${normalizedName}_${_sanitizeName(d.name)}';
+      _upsertProject(projects, name: name, root: d.root);
     }
-  }
-  if (!replaced) {
-    projects.add({'name': normalizedName, 'root': resolvedRoot});
+    if (discovered.isEmpty) {
+      _upsertProject(projects, name: normalizedName, root: resolvedRoot);
+    }
+  } else {
+    _upsertProject(projects, name: normalizedName, root: resolvedRoot);
   }
   json['projects'] = projects;
+
+  if (enableVectorBootstrap) {
+    json['vector'] = {
+      'enabled': true,
+      'provider': 'qdrant',
+      'url': 'http://127.0.0.1:6333',
+      'collection': 'localnest',
+      'embedding': {
+        'provider': 'ollama',
+        'model': 'nomic-embed-text',
+        'url': 'http://127.0.0.1:11434',
+      },
+    };
+  } else if (json['vector'] == null) {
+    json['vector'] = {'enabled': false};
+  }
 
   final out = const JsonEncoder.withIndent('  ').convert(json);
   await file.writeAsString('$out\n');
@@ -122,6 +146,81 @@ int _normalizeInt(
   if (out < min) return min;
   if (out > max) return max;
   return out;
+}
+
+void _upsertProject(
+  List<Map<String, String>> projects, {
+  required String name,
+  required String root,
+}) {
+  for (var i = 0; i < projects.length; i++) {
+    if (projects[i]['name'] == name) {
+      projects[i] = {'name': name, 'root': root};
+      return;
+    }
+  }
+  projects.add({'name': name, 'root': root});
+}
+
+String _sanitizeName(String value) {
+  final cleaned = value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return cleaned.isEmpty ? 'project' : cleaned;
+}
+
+Future<List<({String name, String root})>> _discoverProjectRoots({
+  required String parentRoot,
+  required int maxProjects,
+}) async {
+  final found = <({String name, String root})>[];
+  final queue = <Directory>[Directory(parentRoot)];
+  final visited = <String>{};
+
+  while (queue.isNotEmpty && found.length < maxProjects) {
+    final dir = queue.removeAt(0);
+    String resolved;
+    try {
+      resolved = await dir.resolveSymbolicLinks();
+    } catch (_) {
+      continue;
+    }
+    if (!visited.add(resolved)) continue;
+
+    final markers = [
+      File('$resolved${Platform.pathSeparator}pubspec.yaml'),
+      File('$resolved${Platform.pathSeparator}package.json'),
+      Directory('$resolved${Platform.pathSeparator}.git'),
+    ];
+    final hasMarker =
+        await markers[0].exists() ||
+        await markers[1].exists() ||
+        await markers[2].exists();
+
+    if (hasMarker && resolved != parentRoot) {
+      found.add((name: p.basename(resolved), root: resolved));
+      continue;
+    }
+
+    try {
+      await for (final entity in dir.list(followLinks: false)) {
+        if (entity is! Directory) continue;
+        final base = p.basename(entity.path).toLowerCase();
+        if (base == '.git' ||
+            base == 'node_modules' ||
+            base == 'build' ||
+            base == 'dist') {
+          continue;
+        }
+        queue.add(entity);
+      }
+    } catch (_) {
+      // Ignore unreadable directory segments during discovery.
+    }
+  }
+
+  return found;
 }
 
 List<String> _normalizeDenyPatterns(dynamic value) {
