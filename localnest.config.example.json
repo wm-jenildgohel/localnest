@@ -19,5 +19,8 @@
     "build/",
     "dist/",
     "coverage/"
-  ]
+  ],
+  "vector": {
+    "enabled": false
+  }
 }

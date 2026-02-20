@@ -44,6 +44,7 @@ dart run localnest
 
 ```bash
 ./build/localnest --setup --name scripts --root /absolute/path/to/Scripts
+./build/localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects
 ```
 
 This creates/updates config (default: `~/.localnest/config.json`) and prints a ready MCP snippet.
@@ -79,7 +80,10 @@ Checks `dart`, `git`, and `rg` availability and prints platform-specific `rg` in
     "secrets/",
     "node_modules/",
     ".git/"
-  ]
+  ],
+  "vector": {
+    "enabled": false
+  }
 }
 ```
 
@@ -132,6 +136,7 @@ Add to `.mcp.json`:
 - Bounded parallel multi-project search via `maxConcurrentSearches`.
 - Per-project search timeout via `searchTimeoutMs`.
 - In-memory TTL cache for repeated searches (`searchCacheTtlSeconds`, `searchCacheMaxEntries`).
+- `search_code` now returns `meta.partial=true` when timeout/limits cut search early.
 - Default limits are applied (`maxResults`, snippet lines, tree entries, query length).
 - Keep project roots scoped to active repos for faster responses.
 - Overly broad roots are blocked by default (`allowBroadRoots: false`).

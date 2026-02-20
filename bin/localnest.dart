@@ -6,6 +6,8 @@ Future<void> main(List<String> arguments) async {
   String? configPath;
   var setupMode = false;
   var doctorMode = false;
+  var splitProjects = false;
+  var vectorBootstrap = false;
   String? setupName;
   String? setupRoot;
 
@@ -22,6 +24,14 @@ Future<void> main(List<String> arguments) async {
     }
     if (arg == '--doctor') {
       doctorMode = true;
+      continue;
+    }
+    if (arg == '--split-projects') {
+      splitProjects = true;
+      continue;
+    }
+    if (arg == '--enable-vector-bootstrap') {
+      vectorBootstrap = true;
       continue;
     }
     if (arg == '--name' && i + 1 < arguments.length) {
@@ -48,6 +58,8 @@ Future<void> main(List<String> arguments) async {
         configPath: configPath,
         projectName: resolvedName,
         projectRoot: resolvedRoot,
+        splitProjects: splitProjects,
+        enableVectorBootstrap: vectorBootstrap,
       );
 
       stdout.writeln('LocalNest setup complete.');
@@ -95,10 +107,17 @@ void _printHelp() {
   stdout.writeln(
     '  localnest --setup --name scripts --root /absolute/path/to/Scripts',
   );
+  stdout.writeln(
+    '  localnest --setup --name flutter --root /path/Flutter --split-projects',
+  );
   stdout.writeln('Environment check:');
   stdout.writeln('  localnest --doctor');
   stdout.writeln('Optional flags:');
   stdout.writeln('  --config /absolute/path/to/config.json');
   stdout.writeln('  --name <project-name> (default: workspace)');
   stdout.writeln('  --root <project-root> (default: current directory)');
+  stdout.writeln('  --split-projects (discover subprojects under root)');
+  stdout.writeln(
+    '  --enable-vector-bootstrap (add vector config placeholders)',
+  );
 }
