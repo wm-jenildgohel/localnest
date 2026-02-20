@@ -3,18 +3,29 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+/// Result of running the LocalNest setup helper.
 class SetupResult {
+  /// Creates a setup result.
   const SetupResult({
     required this.configPath,
     required this.projectName,
     required this.projectRoot,
   });
 
+  /// Absolute path to the generated/updated config file.
   final String configPath;
+
+  /// Project alias written to config.
   final String projectName;
+
+  /// Absolute root path written to config.
   final String projectRoot;
 }
 
+/// Creates or updates a LocalNest config and registers a project root.
+///
+/// Use [splitProjects] to auto-discover subprojects under [projectRoot].
+/// Use [enableVectorBootstrap] to include vector integration placeholders.
 Future<SetupResult> setupLocalNest({
   String? configPath,
   required String projectName,

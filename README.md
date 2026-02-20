@@ -1,7 +1,5 @@
 # LocalNest
 
-<p align="center"><strong>Local-first MCP context server</strong></p>
-
 LocalNest is a local MCP server for code context.
 
 It lets AI tools search your local projects safely using a simple flow:

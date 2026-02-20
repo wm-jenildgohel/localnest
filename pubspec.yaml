@@ -1,7 +1,7 @@
 name: localnest
 description: Local-only MCP server for secure project context retrieval across cloned repositories.
 version: 0.1.0-beta.1
-repository: https://github.com/jenil-d-gohel/localnest
+repository: https://github.com/wm-jenildgohel/localnest
 
 environment:
   sdk: ^3.11.0

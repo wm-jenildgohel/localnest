@@ -1,5 +1,8 @@
 import 'dart:io';
 
+/// Runs environment diagnostics for LocalNest runtime requirements.
+///
+/// Returns `0` for success and non-zero when core dependencies are missing.
 Future<int> runLocalNestDoctor({IOSink? outSink}) async {
   final out = outSink ?? stdout;
 
