@@ -1,9 +1,5 @@
 # LocalNest
 
-<p align="center">
-  <img src="assets/localnest-logo.png" alt="LocalNest owl mascot logo" width="260" />
-</p>
-
 <p align="center"><strong>Local-first MCP context server</strong></p>
 
 LocalNest is a local MCP server for code context.
