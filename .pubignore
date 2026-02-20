@@ -1,0 +1,12 @@
+# Local runtime/generated artifacts
+.dart_tool/
+build/
+localnest.config.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Local scratch
+*.log
+*.tmp
