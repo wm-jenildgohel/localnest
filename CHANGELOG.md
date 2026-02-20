@@ -1,3 +1,7 @@
+## 0.1.0-beta.1
+
+- Marked package/server version as beta prerelease
+
 ## 0.1.0
 
 - Initial LocalNest MCP stdio server implementation

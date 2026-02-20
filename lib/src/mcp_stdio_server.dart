@@ -11,7 +11,7 @@ class McpStdioServer {
   McpStdioServer({
     required ToolExecutor executor,
     this.serverName = 'localnest',
-    this.serverVersion = '0.1.0',
+    this.serverVersion = '0.1.0-beta.1',
   }) : _executor = executor;
 
   final ToolExecutor _executor;
