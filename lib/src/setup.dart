@@ -30,9 +30,10 @@ Future<SetupResult> setupLocalNest({
   String? configPath,
   required String projectName,
   required String projectRoot,
-  bool splitProjects = false,
+  bool splitProjects = true,
+  bool flutterOnly = false,
   int maxDiscoveredProjects = 150,
-  bool enableVectorBootstrap = false,
+  bool enableVectorBootstrap = true,
 }) async {
   final normalizedName = projectName.trim();
   if (normalizedName.isEmpty) {
@@ -96,6 +97,7 @@ Future<SetupResult> setupLocalNest({
     final discovered = await _discoverProjectRoots(
       parentRoot: resolvedRoot,
       maxProjects: maxDiscoveredProjects,
+      flutterOnly: flutterOnly,
     );
     for (final d in discovered) {
       final name = '${normalizedName}_${_sanitizeName(d.name)}';
@@ -184,6 +186,7 @@ String _sanitizeName(String value) {
 Future<List<({String name, String root})>> _discoverProjectRoots({
   required String parentRoot,
   required int maxProjects,
+  required bool flutterOnly,
 }) async {
   final found = <({String name, String root})>[];
   final queue = <Directory>[Directory(parentRoot)];
@@ -199,15 +202,15 @@ Future<List<({String name, String root})>> _discoverProjectRoots({
     }
     if (!visited.add(resolved)) continue;
 
-    final markers = [
-      File('$resolved${Platform.pathSeparator}pubspec.yaml'),
-      File('$resolved${Platform.pathSeparator}package.json'),
-      Directory('$resolved${Platform.pathSeparator}.git'),
-    ];
-    final hasMarker =
-        await markers[0].exists() ||
-        await markers[1].exists() ||
-        await markers[2].exists();
+    final hasPubspec = await File(
+      '$resolved${Platform.pathSeparator}pubspec.yaml',
+    ).exists();
+    final hasFlutterMarker = hasPubspec && await _isFlutterProject(resolved);
+    final hasGenericMarker =
+        hasPubspec ||
+        await File('$resolved${Platform.pathSeparator}package.json').exists() ||
+        await Directory('$resolved${Platform.pathSeparator}.git').exists();
+    final hasMarker = flutterOnly ? hasFlutterMarker : hasGenericMarker;
 
     if (hasMarker && resolved != parentRoot) {
       found.add((name: p.basename(resolved), root: resolved));
@@ -232,6 +235,17 @@ Future<List<({String name, String root})>> _discoverProjectRoots({
   }
 
   return found;
+}
+
+Future<bool> _isFlutterProject(String root) async {
+  final pubspec = File('$root${Platform.pathSeparator}pubspec.yaml');
+  if (!await pubspec.exists()) return false;
+  try {
+    final content = await pubspec.readAsString();
+    return RegExp(r'^\s*flutter\s*:', multiLine: true).hasMatch(content);
+  } catch (_) {
+    return false;
+  }
 }
 
 List<String> _normalizeDenyPatterns(dynamic value) {

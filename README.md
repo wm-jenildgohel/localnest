@@ -29,23 +29,54 @@ Use explicit values only when needed:
 localnest --setup --name scripts --root /absolute/path/to/Scripts
 ```
 
-Large parent root (recommended): split into project aliases:
+### 2.1 One-command setup + MCP integration (5-minute path)
 
 ```bash
-localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects
+localnest --setup --integrate
 ```
 
-Optional vector placeholders:
+This will:
+- create/update LocalNest config
+- auto-write/update `.mcp.json` in current directory
+- register `mcpServers.localnest` with a working command for your machine
+
+Use a custom MCP config path when needed:
 
 ```bash
-localnest --setup --name flutter --root /absolute/path/to/Flutter --split-projects --enable-vector-bootstrap
+localnest --setup --integrate --mcp-file /absolute/path/to/.mcp.json
 ```
+
+Client-root Flutter-only discovery (recommended for agency/client work):
+
+```bash
+localnest --setup --integrate --root /absolute/path/to/client/monorepo --name client --flutter-only
+```
+
+This scans subfolders and registers only directories that contain a Flutter `pubspec.yaml` block.
 
 ## 3) Health check
 
 ```bash
 localnest --doctor
 ```
+
+## 3.1 Update check
+
+```bash
+localnest --check-update
+```
+
+## 3.2 Safe auto-upgrade + MCP repair
+
+```bash
+localnest --upgrade
+```
+
+This will:
+- check latest version from pub.dev
+- run `dart pub global activate localnest` when update is available
+- repair `localnest` MCP entry without touching other MCP servers
+- create a timestamped backup of existing `.mcp.json` before changes
 
 ## 4) Inspect config
 
@@ -61,6 +92,12 @@ This prints:
 
 ## 5) Add to MCP config
 
+Recommended: use `localnest --setup --integrate` so LocalNest writes MCP config for you.
+Manual setup fallback: copy the exact MCP JSON snippet printed by `localnest --setup`.
+It now auto-selects a working command for your machine:
+- global binary (`~/.pub-cache/bin/localnest`) when available
+- source mode (`dart run /absolute/path/to/bin/localnest.dart`) when global binary is missing
+
 ```json
 {
   "mcpServers": {
@@ -69,7 +106,11 @@ This prints:
       "args": [
         "--config",
         "/absolute/path/to/localnest.config.json"
-      ]
+      ],
+      "env": {
+        "DART_SUPPRESS_ANALYTICS": "true",
+        "LOCALNEST_CONFIG": "/absolute/path/to/localnest.config.json"
+      }
     }
   }
 }
@@ -77,7 +118,7 @@ This prints:
 
 ## Production Configuration (Required)
 
-Use this exact structure in production.
+Use an absolute command path in production when possible. **Note:** GUI apps like Claude Desktop or Antigravity might not inherit your terminal's `PATH`.
 
 Valid MCP block:
 
@@ -85,15 +126,20 @@ Valid MCP block:
 {
   "mcpServers": {
     "localnest": {
-      "command": "/home/wmt-tushar/.pub-cache/bin/localnest",
+      "command": "/home/<your_username>/.pub-cache/bin/localnest",
       "args": [
         "--config",
-        "/home/wmt-tushar/.localnest/config.json"
-      ]
+        "/home/<your_username>/.localnest/config.json"
+      ],
+      "env": {
+        "DART_SUPPRESS_ANALYTICS": "true",
+        "LOCALNEST_CONFIG": "/home/<your_username>/.localnest/config.json"
+      }
     }
   }
 }
 ```
+> ⚠️ **IMPORTANT:** Replace `<your_username>` with your actual system username. Use the exact JSON output provided by the `localnest --setup` command.
 
 Do not do this:
 
@@ -101,15 +147,23 @@ Do not do this:
 {
   "mcpServers": {
     "localnest": {
-      "command": "/home/wmt-tushar/.localnest"
+      "command": "localnest",
+      "args": [
+        "--config",
+        "/home/<your_username>/.localnest/config.json"
+      ],
+      "env": {
+        "DART_SUPPRESS_ANALYTICS": "true",
+        "LOCALNEST_CONFIG": "/home/<your_username>/.localnest/config.json"
+      }
     }
   }
 }
 ```
 
-Reason: `command` must be an executable, not a directory.
+Reason: `command` might fail silently if `localnest` is not in the system `PATH` of the calling application.
 
-Required config file (`/home/wmt-tushar/.localnest/config.json`) example:
+Required config file (`/home/<your_username>/.localnest/config.json`) example:
 
 ```json
 {
@@ -205,9 +259,7 @@ Result metadata:
 
 | Command | What it does |
 |---|---|
-| `--setup` | Create/update config (defaults to current directory) |
-| `--split-projects` | Discover subprojects under root |
-| `--enable-vector-bootstrap` | Add vector config placeholders |
+| `--setup` | Create/update config (defaults to current directory and inferred project name) |
 | `--doctor` | Check `dart`, `git`, `rg` and show install hints |
 | `--config` | Inspect default config path and validity |
 | `--config <path>` | Use explicit config path (inspect/manual run) |
@@ -242,6 +294,8 @@ Result metadata:
 }
 ```
 
+> 📌 **Future Milestone Notice:** The `vector` configuration block is automatically generated as a placeholder for an upcoming feature. Currently, LocalNest relies entirely on `ripgrep`/`git grep` and does not require you to install Qdrant, Ollama, or any other vector tools to function fully.
+
 ## Security Defaults
 
 - read-only tools only
@@ -252,7 +306,7 @@ Result metadata:
 
 ## Performance Tips
 
-1. Use `--split-projects` for large directories.
+1. Setup process automatically splits large parent directories via sub-projects for better performance.
 2. Query specific project aliases instead of giant roots.
 3. Keep `rg` installed for fast search.
 4. Tune `searchTimeoutMs` and `maxConcurrentSearches` per machine.
@@ -281,13 +335,12 @@ localnest --config
 - fix by re-running setup with a real path:
 
 ```bash
-localnest --setup --name prod --root /absolute/path/to/real/project --config /home/wmt-tushar/.localnest/config.json
+localnest --setup --name prod --root /absolute/path/to/real/project --config /home/<your_username>/.localnest/config.json
 ```
 
 ### Search is slow
 
 - run `--doctor` and install `rg`
-- split projects instead of one huge root
 - lower scope by targeting a specific project alias
 
 ### No results

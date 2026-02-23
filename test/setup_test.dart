@@ -97,6 +97,44 @@ void main() {
       expect(data['vector']['enabled'], isTrue);
     });
 
+    test('flutter-only discovery filters non-flutter projects', () async {
+      final root = Directory('${tempDir.path}/mono')
+        ..createSync(recursive: true);
+      final flutterApp = Directory('${root.path}/mobile_app')
+        ..createSync(recursive: true);
+      final dartPkg = Directory('${root.path}/shared_pkg')
+        ..createSync(recursive: true);
+
+      File('${flutterApp.path}/pubspec.yaml').writeAsStringSync(
+        'name: mobile_app\n'
+        'flutter:\n'
+        '  uses-material-design: true\n',
+      );
+      File('${dartPkg.path}/pubspec.yaml').writeAsStringSync(
+        'name: shared_pkg\n'
+        'environment:\n'
+        '  sdk: ">=3.0.0 <4.0.0"\n',
+      );
+
+      final configPath = '${tempDir.path}/config_flutter_only.json';
+      await setupLocalNest(
+        configPath: configPath,
+        projectName: 'client',
+        projectRoot: root.path,
+        splitProjects: true,
+        flutterOnly: true,
+      );
+
+      final data =
+          jsonDecode(await File(configPath).readAsString())
+              as Map<String, dynamic>;
+      final projects = (data['projects'] as List).cast<Map<String, dynamic>>();
+      final names = projects.map((p) => '${p['name']}').toList();
+
+      expect(names.any((name) => name.contains('mobile_app')), isTrue);
+      expect(names.any((name) => name.contains('shared_pkg')), isFalse);
+    });
+
     test('throws for missing root', () async {
       final configPath = '${tempDir.path}/config3.json';
       expect(

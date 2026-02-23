@@ -587,6 +587,9 @@ class LocalNestTools {
 
     final file = File(resolved.absolute);
     if (!await file.exists()) return _error('file not found');
+    if (!await _isResolvedFileWithinProject(project, file)) {
+      return _error('path resolves outside allowed root');
+    }
 
     List<String> lines;
     try {
@@ -755,6 +758,27 @@ class LocalNestTools {
     final b = p.normalize(base);
     final t = p.normalize(target);
     return t == b || t.startsWith('$b${Platform.pathSeparator}');
+  }
+
+  Future<bool> _isResolvedFileWithinProject(
+    ProjectConfig project,
+    File file,
+  ) async {
+    String resolvedRoot;
+    try {
+      resolvedRoot = await Directory(project.root).resolveSymbolicLinks();
+    } catch (_) {
+      resolvedRoot = p.absolute(project.root);
+    }
+
+    String resolvedFile;
+    try {
+      resolvedFile = await file.resolveSymbolicLinks();
+    } catch (_) {
+      resolvedFile = p.absolute(file.path);
+    }
+
+    return _isWithin(resolvedRoot, resolvedFile);
   }
 
   String? _safeRelative(String root, String maybeAbsolute) {
