@@ -10,7 +10,7 @@ npx -y localnest-mcp-setup
 ```
 If package is not yet published to npm, run from GitHub:
 ```bash
-npx -y github:your-org/localnest localnest-mcp-setup
+npx -y github:wm-jenildgohel/localnest#beta-node localnest-mcp-setup
 ```
 
 If needed, users can pass roots directly:
@@ -26,7 +26,7 @@ Then copy `mcpServers.localnest` from `~/.localnest/mcp.localnest.json` into MCP
 
 To generate snippet for a custom package/ref:
 ```bash
-npx -y localnest-mcp-setup --package="github:your-org/localnest"
+npx -y localnest-mcp-setup --package="github:wm-jenildgohel/localnest#beta-node"
 ```
 
 ## MCP client config (no install)
