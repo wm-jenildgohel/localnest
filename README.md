@@ -238,10 +238,25 @@ cd localnest
 
 | Tool | Purpose | Typical Use |
 |---|---|---|
+| `smart_context` | One-call context retrieval | Preferred first call for AI agents |
 | `list_projects` | List project aliases | First call to discover targets |
 | `search_code` | Find matching files/lines | Locate implementation points |
 | `get_file_snippet` | Read exact line ranges | Pull context for AI response |
 | `get_repo_structure` | Lightweight tree view | Understand project layout |
+
+AI-friendly calling behavior:
+- `smart_context` is the primary tool for AI clients (single call returns matches + snippets)
+- `search_code` accepts `query`, `q`, `pattern`, or `text`
+- `search_code` accepts `project` or `projectName`
+- `get_file_snippet` accepts `project` or `projectName`, and `path`, `file`, or `filePath`
+- `get_file_snippet` accepts `aroundLine` or `line`, and `startLine`/`endLine` or `start`/`end`
+- `get_repo_structure` accepts `project` or `projectName`
+- when only one project is configured, `get_file_snippet` and `get_repo_structure` allow omitting `project`
+- `get_file_snippet` accepts both relative and absolute paths (must still resolve inside allowed roots)
+- MCP transport is tolerant to both `\r\n\r\n` and `\n\n` frame separators
+- `initialize` works with or without `protocolVersion` (defaults to latest supported)
+- server auto-initializes for `tools/list`/`tools/call` if a client skips initialize
+- `tools/call` accepts both `arguments` and `input`
 
 ### `search_code` backend order
 

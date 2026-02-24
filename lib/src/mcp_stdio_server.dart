@@ -53,7 +53,9 @@ class McpStdioServer {
 
   Future<void> _drain() async {
     while (true) {
-      final headerEnd = _indexOf(_buffer, const [13, 10, 13, 10]); // \r\n\r\n
+      final header = _locateHeaderEnd(_buffer);
+      final headerEnd = header.index;
+      final delimiterLength = header.delimiterLength;
       if (headerEnd < 0) {
         if (_buffer.length > _maxHeaderBytes) {
           _err.writeln('localnest: header too large, dropping buffer');
@@ -64,7 +66,7 @@ class McpStdioServer {
 
       if (headerEnd > _maxHeaderBytes) {
         _err.writeln('localnest: header exceeded max size, dropping frame');
-        _buffer.removeRange(0, headerEnd + 4);
+        _buffer.removeRange(0, headerEnd + delimiterLength);
         continue;
       }
 
@@ -72,14 +74,14 @@ class McpStdioServer {
       final headerText = ascii.decode(headerBytes, allowInvalid: true);
       final contentLength = _parseContentLength(headerText);
       if (contentLength <= 0) {
-        _buffer.removeRange(0, headerEnd + 4);
+        _buffer.removeRange(0, headerEnd + delimiterLength);
         continue;
       }
       if (contentLength > _maxBodyBytes) {
         _err.writeln(
           'localnest: body too large ($contentLength), dropping frame',
         );
-        final bodyStart = headerEnd + 4;
+        final bodyStart = headerEnd + delimiterLength;
         if (_buffer.length >= bodyStart + contentLength) {
           _buffer.removeRange(0, bodyStart + contentLength);
         } else {
@@ -88,7 +90,7 @@ class McpStdioServer {
         continue;
       }
 
-      final bodyStart = headerEnd + 4;
+      final bodyStart = headerEnd + delimiterLength;
       if (_buffer.length < bodyStart + contentLength) return;
 
       final bodyBytes = _buffer.sublist(bodyStart, bodyStart + contentLength);
@@ -96,7 +98,12 @@ class McpStdioServer {
 
       Map<String, dynamic>? message;
       try {
-        message = jsonDecode(utf8.decode(bodyBytes)) as Map<String, dynamic>;
+        final decoded = jsonDecode(utf8.decode(bodyBytes));
+        if (decoded is! Map<String, dynamic>) {
+          await _sendError(null, -32600, 'Invalid Request', allowNullId: true);
+          continue;
+        }
+        message = decoded;
       } catch (e) {
         _err.writeln('localnest: invalid JSON message: $e');
         await _sendError(null, -32700, 'Parse error', allowNullId: true);
@@ -109,8 +116,19 @@ class McpStdioServer {
   }
 
   Future<void> _handle(Map<String, dynamic> message) async {
-    final method = message['method']?.toString();
     final id = message['id'];
+    final jsonrpc = message['jsonrpc'];
+    if (jsonrpc != null && jsonrpc.toString() != '2.0') {
+      await _sendError(
+        id,
+        -32600,
+        'Invalid Request: jsonrpc must be "2.0"',
+        allowNullId: true,
+      );
+      return;
+    }
+
+    final method = message['method']?.toString();
     final params = (message['params'] is Map<String, dynamic>)
         ? message['params'] as Map<String, dynamic>
         : <String, dynamic>{};
@@ -131,16 +149,9 @@ class McpStdioServer {
         case 'initialize':
           final requestedVersion =
               params['protocolVersion']?.toString().trim() ?? '';
-          if (requestedVersion.isEmpty) {
-            await _sendError(
-              id,
-              -32602,
-              'Invalid params: protocolVersion is required',
-            );
-            return;
-          }
           final negotiated =
-              _supportedProtocolVersions.contains(requestedVersion)
+              requestedVersion.isNotEmpty &&
+                  _supportedProtocolVersions.contains(requestedVersion)
               ? requestedVersion
               : _supportedProtocolVersions.first;
           _initialized = true;
@@ -152,26 +163,33 @@ class McpStdioServer {
             'serverInfo': {'name': serverName, 'version': serverVersion},
           });
           return;
+        case 'initialized':
         case 'notifications/initialized':
+          _initialized = true;
+          return;
+        case 'notifications/cancelled':
+        case '\$/cancelRequest':
           return;
         case 'ping':
           await _sendResult(id, <String, dynamic>{});
           return;
         case 'tools/list':
           if (!_initialized) {
-            await _sendError(id, -32002, 'Server not initialized');
-            return;
+            // Compatibility mode for clients that call tools APIs directly.
+            _initialized = true;
+            _err.writeln('localnest: auto-initialized for tools/list');
           }
           await _sendResult(id, _executor.toolsListPayload());
           return;
         case 'tools/call':
           if (!_initialized) {
-            await _sendError(id, -32002, 'Server not initialized');
-            return;
+            _initialized = true;
+            _err.writeln('localnest: auto-initialized for tools/call');
           }
           final name = params['name']?.toString() ?? '';
-          final args = (params['arguments'] is Map<String, dynamic>)
-              ? params['arguments'] as Map<String, dynamic>
+          final argsCandidate = params['arguments'] ?? params['input'];
+          final args = (argsCandidate is Map<String, dynamic>)
+              ? argsCandidate
               : <String, dynamic>{};
           if (name.isEmpty) {
             await _sendResult(id, {
@@ -226,13 +244,25 @@ class McpStdioServer {
 
   int _parseContentLength(String headerText) {
     for (final line in const LineSplitter().convert(headerText)) {
-      final parts = line.split(':');
-      if (parts.length != 2) continue;
-      if (parts[0].trim().toLowerCase() == 'content-length') {
-        return int.tryParse(parts[1].trim()) ?? 0;
+      final sep = line.indexOf(':');
+      if (sep <= 0) continue;
+      final key = line.substring(0, sep).trim().toLowerCase();
+      if (key == 'content-length') {
+        final value = line.substring(sep + 1).trim();
+        return int.tryParse(value) ?? 0;
       }
     }
     return 0;
+  }
+
+  ({int index, int delimiterLength}) _locateHeaderEnd(List<int> bytes) {
+    final crlf = _indexOf(bytes, const [13, 10, 13, 10]); // \r\n\r\n
+    final lf = _indexOf(bytes, const [10, 10]); // \n\n
+    if (crlf < 0 && lf < 0) return (index: -1, delimiterLength: 0);
+    if (crlf < 0) return (index: lf, delimiterLength: 2);
+    if (lf < 0) return (index: crlf, delimiterLength: 4);
+    if (lf < crlf) return (index: lf, delimiterLength: 2);
+    return (index: crlf, delimiterLength: 4);
   }
 
   int _indexOf(List<int> bytes, List<int> pattern) {

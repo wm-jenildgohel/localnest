@@ -30,23 +30,72 @@ class LocalNestTools {
     return {
       'tools': [
         {
+          'name': 'smart_context',
+          'description':
+              'Primary one-call tool for AI agents. Finds relevant matches and returns nearby code snippets in a single response.',
+          'inputSchema': {
+            'type': 'object',
+            'properties': {
+              'query': {'type': 'string'},
+              'q': {'type': 'string'},
+              'pattern': {'type': 'string'},
+              'text': {'type': 'string'},
+              'project': {'type': 'string'},
+              'projectName': {'type': 'string'},
+              'allProjects': {'type': 'boolean'},
+              'maxResults': {
+                'type': 'integer',
+                'minimum': 1,
+                'maximum': 50,
+              },
+              'maxSnippets': {
+                'type': 'integer',
+                'minimum': 1,
+                'maximum': 20,
+              },
+              'contextLines': {'type': 'integer', 'minimum': 0, 'maximum': 80},
+              'caseSensitive': {'type': 'boolean'},
+            },
+            'anyOf': [
+              {
+                'required': ['query'],
+              },
+              {
+                'required': ['q'],
+              },
+              {
+                'required': ['pattern'],
+              },
+              {
+                'required': ['text'],
+              },
+            ],
+            'additionalProperties': true,
+          },
+        },
+        {
           'name': 'list_projects',
-          'description': 'List configured local projects and allowed roots.',
+          'description':
+              'First call in a session. Lists configured project aliases. Use aliases from this output in other tools.',
           'inputSchema': {
             'type': 'object',
             'properties': {},
-            'additionalProperties': false,
+            'additionalProperties': true,
           },
         },
         {
           'name': 'search_code',
           'description':
-              'Search code within allowed project roots. Uses rg when available, then falls back to git grep / Dart scan.',
+              'Find text in code. Typical flow: list_projects -> search_code -> get_file_snippet. Accepts query aliases (query/q/pattern/text) and project aliases (project/projectName).',
           'inputSchema': {
             'type': 'object',
             'properties': {
               'query': {'type': 'string'},
+              'q': {'type': 'string'},
+              'pattern': {'type': 'string'},
+              'text': {'type': 'string'},
               'project': {'type': 'string'},
+              'projectName': {'type': 'string'},
               'maxResults': {
                 'type': 'integer',
                 'minimum': 1,
@@ -54,36 +103,66 @@ class LocalNestTools {
               },
               'caseSensitive': {'type': 'boolean'},
             },
-            'required': ['query'],
-            'additionalProperties': false,
+            'anyOf': [
+              {
+                'required': ['query'],
+              },
+              {
+                'required': ['q'],
+              },
+              {
+                'required': ['pattern'],
+              },
+              {
+                'required': ['text'],
+              },
+            ],
+            'additionalProperties': true,
           },
         },
         {
           'name': 'get_file_snippet',
           'description':
-              'Read specific line ranges from a file inside an allowed project.',
+              'Read file lines by project/path. If only one project is configured, project can be omitted. Accepts aliases: project/projectName, path/file/filePath, aroundLine/line, startLine/start, endLine/end.',
           'inputSchema': {
             'type': 'object',
             'properties': {
               'project': {'type': 'string'},
+              'projectName': {'type': 'string'},
               'path': {'type': 'string'},
+              'file': {'type': 'string'},
+              'filePath': {'type': 'string'},
               'startLine': {'type': 'integer', 'minimum': 1},
+              'start': {'type': 'integer', 'minimum': 1},
               'endLine': {'type': 'integer', 'minimum': 1},
+              'end': {'type': 'integer', 'minimum': 1},
               'aroundLine': {'type': 'integer', 'minimum': 1},
+              'line': {'type': 'integer', 'minimum': 1},
               'contextLines': {'type': 'integer', 'minimum': 0, 'maximum': 200},
             },
-            'required': ['project', 'path'],
-            'additionalProperties': false,
+            'anyOf': [
+              {
+                'required': ['path'],
+              },
+              {
+                'required': ['file'],
+              },
+              {
+                'required': ['filePath'],
+              },
+            ],
+            'additionalProperties': true,
           },
         },
         {
           'name': 'get_repo_structure',
           'description':
-              'List directories and files under a project root with depth and entry limits.',
+              'List files/directories under a project root with bounds. If one project exists, project can be omitted.',
           'inputSchema': {
             'type': 'object',
             'properties': {
               'project': {'type': 'string'},
+              'projectName': {'type': 'string'},
               'maxDepth': {'type': 'integer', 'minimum': 1, 'maximum': 10},
               'maxEntries': {
                 'type': 'integer',
@@ -91,8 +170,8 @@ class LocalNestTools {
                 'maximum': _maxTreeEntriesHard,
               },
             },
-            'required': ['project'],
-            'additionalProperties': false,
+            'required': [],
+            'additionalProperties': true,
           },
         },
       ],
@@ -104,6 +183,8 @@ class LocalNestTools {
     Map<String, dynamic> args,
   ) async {
     switch (name) {
+      case 'smart_context':
+        return _smartContext(args);
       case 'list_projects':
         return _ok({
           'projects': _config.projects
@@ -126,14 +207,132 @@ class LocalNestTools {
     }
   }
 
+  Future<Map<String, dynamic>> _smartContext(Map<String, dynamic> args) async {
+    final query = _firstNonEmptyString(args, const [
+      'query',
+      'q',
+      'pattern',
+      'text',
+    ]);
+    if (query.isEmpty) return _error('query is required');
+
+    final requestedProject = _firstNonEmptyString(args, const [
+      'project',
+      'projectName',
+    ]);
+    final allProjects = args['allProjects'] == true;
+    String projectForSearch = requestedProject;
+    var autoScoped = false;
+    if (!allProjects &&
+        projectForSearch.isEmpty &&
+        _config.projects.length > 1) {
+      projectForSearch = _config.projects.first.name;
+      autoScoped = true;
+    }
+
+    final searchResult = await _searchCode({
+      'query': query,
+      'project': projectForSearch,
+      'maxResults': _clampInt(
+        args['maxResults'],
+        defaultValue: 8,
+        min: 1,
+        max: 50,
+      ),
+      'caseSensitive': args['caseSensitive'] == true,
+    });
+    if (searchResult['isError'] == true) return searchResult;
+
+    final searchData = searchResult['structuredContent'] as Map<String, dynamic>;
+    final matches = (searchData['matches'] as List? ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    final maxSnippets = _clampInt(
+      args['maxSnippets'],
+      defaultValue: 4,
+      min: 1,
+      max: 20,
+    );
+    final contextLines = _clampInt(
+      args['contextLines'],
+      defaultValue: 20,
+      min: 0,
+      max: 80,
+    );
+
+    final snippets = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    for (final match in matches) {
+      if (snippets.length >= maxSnippets) break;
+      final project = (match['project'] ?? '').toString();
+      final path = (match['path'] ?? '').toString();
+      final line = _nullableInt(match['line']) ?? 1;
+      if (project.isEmpty || path.isEmpty) continue;
+
+      final dedupeKey = '$project::$path::$line';
+      if (!seen.add(dedupeKey)) continue;
+
+      final snippetResult = await _getFileSnippet({
+        'project': project,
+        'path': path,
+        'aroundLine': line,
+        'contextLines': contextLines,
+      });
+      if (snippetResult['isError'] == true) continue;
+
+      final snippetData =
+          snippetResult['structuredContent'] as Map<String, dynamic>;
+      snippets.add({
+        'project': snippetData['project'],
+        'path': snippetData['path'],
+        'line': line,
+        'startLine': snippetData['startLine'],
+        'endLine': snippetData['endLine'],
+        'snippet': snippetData['snippet'],
+      });
+    }
+
+    final projects = _config.projects.map((p) => p.name).toList();
+    final projectFilter = requestedProject;
+
+    return _ok({
+      'query': query,
+      'projectFilter': projectFilter,
+      'effectiveProject': projectForSearch,
+      'allProjects': allProjects,
+      'autoScoped': autoScoped,
+      'projects': projects,
+      'matchCount': matches.length,
+      'matches': matches,
+      'snippetCount': snippets.length,
+      'snippets': snippets,
+      'meta': searchData['meta'],
+      'nextAction':
+          autoScoped
+              ? 'Set project explicitly or pass allProjects=true to search across all projects.'
+              : snippets.isEmpty
+              ? 'Try broader query text or increase maxResults.'
+              : 'Use get_file_snippet for deeper ranges on selected files.',
+    });
+  }
+
   Future<Map<String, dynamic>> _searchCode(Map<String, dynamic> args) async {
-    final query = (args['query'] ?? '').toString().trim();
+    final query = _firstNonEmptyString(args, const [
+      'query',
+      'q',
+      'pattern',
+      'text',
+    ]);
     if (query.isEmpty) return _error('query is required');
     if (query.length > _maxQueryLength) {
       return _error('query too long (max $_maxQueryLength chars)');
     }
 
-    final projectFilter = (args['project'] ?? '').toString().trim();
+    final projectFilter = _firstNonEmptyString(args, const [
+      'project',
+      'projectName',
+    ]);
     final maxResults = _clampInt(
       args['maxResults'],
       defaultValue: 20,
@@ -569,15 +768,27 @@ class LocalNestTools {
   Future<Map<String, dynamic>> _getFileSnippet(
     Map<String, dynamic> args,
   ) async {
-    final projectName = (args['project'] ?? '').toString().trim();
-    final inputPath = (args['path'] ?? '').toString().trim();
+    final projectName = _firstNonEmptyString(args, const [
+      'project',
+      'projectName',
+    ]);
+    final inputPath = _firstNonEmptyString(args, const [
+      'path',
+      'file',
+      'filePath',
+    ]);
 
-    if (projectName.isEmpty || inputPath.isEmpty) {
-      return _error('project and path are required');
+    if (inputPath.isEmpty) {
+      return _error('path is required');
     }
 
-    final project = _findProject(projectName);
-    if (project == null) return _error('Unknown project: $projectName');
+    final project = _findProjectWithFallback(projectName);
+    if (project == null) {
+      if (projectName.isNotEmpty) return _error('Unknown project: $projectName');
+      return _error(
+        'project is required when multiple projects are configured. Call list_projects first.',
+      );
+    }
 
     final resolved = _resolveProjectPath(project, inputPath);
     if (resolved == null) return _error('path is outside allowed root');
@@ -608,7 +819,7 @@ class LocalNestTools {
       });
     }
 
-    final aroundLine = _nullableInt(args['aroundLine']);
+    final aroundLine = _firstInt(args, const ['aroundLine', 'line']);
     final contextLines = _clampInt(
       args['contextLines'],
       defaultValue: 20,
@@ -624,13 +835,13 @@ class LocalNestTools {
       endLine = aroundLine + contextLines;
     } else {
       startLine = _clampInt(
-        args['startLine'],
+        _firstInt(args, const ['startLine', 'start']),
         defaultValue: 1,
         min: 1,
         max: lines.length,
       );
       endLine = _clampInt(
-        args['endLine'],
+        _firstInt(args, const ['endLine', 'end']),
         defaultValue: startLine + 80,
         min: 1,
         max: lines.length,
@@ -663,11 +874,17 @@ class LocalNestTools {
   Future<Map<String, dynamic>> _getRepoStructure(
     Map<String, dynamic> args,
   ) async {
-    final projectName = (args['project'] ?? '').toString().trim();
-    if (projectName.isEmpty) return _error('project is required');
-
-    final project = _findProject(projectName);
-    if (project == null) return _error('Unknown project: $projectName');
+    final projectName = _firstNonEmptyString(args, const [
+      'project',
+      'projectName',
+    ]);
+    final project = _findProjectWithFallback(projectName);
+    if (project == null) {
+      if (projectName.isNotEmpty) return _error('Unknown project: $projectName');
+      return _error(
+        'project is required when multiple projects are configured. Call list_projects first.',
+      );
+    }
 
     final maxDepth = _clampInt(
       args['maxDepth'],
@@ -736,15 +953,25 @@ class LocalNestTools {
     return null;
   }
 
+  ProjectConfig? _findProjectWithFallback(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isNotEmpty) return _findProject(trimmed);
+    if (_config.projects.length == 1) return _config.projects.first;
+    return null;
+  }
+
   ({String absolute, String relative})? _resolveProjectPath(
     ProjectConfig project,
     String inputPath,
   ) {
     final normalized = p.normalize(inputPath.replaceAll('\\', '/'));
-    if (normalized.startsWith('../') || normalized == '..') return null;
-
-    final joined = p.normalize(p.join(project.root, normalized));
-    final full = p.absolute(joined);
+    String full;
+    if (p.isAbsolute(normalized)) {
+      full = p.absolute(normalized);
+    } else {
+      if (normalized.startsWith('../') || normalized == '..') return null;
+      full = p.absolute(p.normalize(p.join(project.root, normalized)));
+    }
     final base = p.absolute(project.root);
 
     if (!_isWithin(base, full)) return null;
@@ -814,6 +1041,22 @@ class LocalNestTools {
     if (value == null) return null;
     if (value is int) return value;
     return int.tryParse(value.toString());
+  }
+
+  String _firstNonEmptyString(Map<String, dynamic> args, List<String> keys) {
+    for (final key in keys) {
+      final value = (args[key] ?? '').toString().trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  int? _firstInt(Map<String, dynamic> args, List<String> keys) {
+    for (final key in keys) {
+      final value = _nullableInt(args[key]);
+      if (value != null) return value;
+    }
+    return null;
   }
 
   String _cacheKey({

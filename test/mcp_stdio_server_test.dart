@@ -8,22 +8,21 @@ import 'package:test/test.dart';
 
 void main() {
   group('McpStdioServer', () {
-    test('rejects tools/list before initialize', () async {
+    test('accepts tools/list before initialize via compatibility mode', () async {
       final response = await _runSingle(
         _jsonRpcRequest(id: 1, method: 'tools/list', params: {}),
       );
 
-      expect(response['error']['code'], -32002);
-      expect(response['error']['message'], contains('not initialized'));
+      expect(response['result'], isA<Map>());
+      expect((response['result']['tools'] as List).isNotEmpty, isTrue);
     });
 
-    test('requires protocolVersion on initialize', () async {
+    test('accepts initialize without protocolVersion', () async {
       final response = await _runSingle(
         _jsonRpcRequest(id: 1, method: 'initialize', params: {}),
       );
 
-      expect(response['error']['code'], -32602);
-      expect(response['error']['message'], contains('protocolVersion'));
+      expect(response['result']['protocolVersion'], '2025-11-05');
     });
 
     test('returns parse error for malformed json body', () async {
@@ -31,6 +30,43 @@ void main() {
       expect(responses, hasLength(1));
       expect(responses.first['error']['code'], -32700);
       expect(responses.first['id'], isNull);
+    });
+
+    test('returns invalid request for non-object json body', () async {
+      final responses = await _runRaw([_frameBytes('[]')]);
+      expect(responses, hasLength(1));
+      expect(responses.first['error']['code'], -32600);
+      expect(responses.first['id'], isNull);
+    });
+
+    test('returns invalid request for non-2.0 jsonrpc value', () async {
+      final responses = await _runRaw([
+        _frameBytes(
+          jsonEncode({
+            'jsonrpc': '1.0',
+            'id': 1,
+            'method': 'initialize',
+            'params': <String, dynamic>{},
+          }),
+        ),
+      ]);
+      expect(responses, hasLength(1));
+      expect(responses.first['error']['code'], -32600);
+      expect(responses.first['id'], 1);
+    });
+
+    test('accepts initialize when jsonrpc field is omitted', () async {
+      final responses = await _runRaw([
+        _frameBytes(
+          jsonEncode({
+            'id': 1,
+            'method': 'initialize',
+            'params': <String, dynamic>{},
+          }),
+        ),
+      ]);
+      expect(responses, hasLength(1));
+      expect(responses.first['result']['protocolVersion'], '2025-11-05');
     });
 
     test(
@@ -95,6 +131,45 @@ void main() {
       expect(responses, hasLength(2));
       expect(responses[1]['error']['code'], -32603);
       expect(responses[1]['error']['message'], 'Internal error');
+    });
+
+    test('tools/call accepts input alias for arguments', () async {
+      final responses = await _runRaw([
+        _frameBytes(
+          _jsonRpcRequest(
+            id: 1,
+            method: 'initialize',
+            params: {'protocolVersion': '2025-11-05'},
+          ),
+        ),
+        _frameBytes(
+          _jsonRpcRequest(
+            id: 2,
+            method: 'tools/call',
+            params: {
+              'name': 'echo',
+              'input': <String, dynamic>{'from': 'input'},
+            },
+          ),
+        ),
+      ]);
+
+      expect(responses, hasLength(2));
+      expect(responses[1]['result']['isError'], isFalse);
+    });
+
+    test('parses frame headers that use LF delimiter', () async {
+      final body = _jsonRpcRequest(
+        id: 1,
+        method: 'initialize',
+        params: {'protocolVersion': '2025-11-05'},
+      );
+      final payload = utf8.encode(body);
+      final frame = ascii.encode('Content-Length: ${payload.length}\n\n') + payload;
+      final responses = await _runRaw([frame]);
+
+      expect(responses, hasLength(1));
+      expect(responses.first['result']['protocolVersion'], '2025-11-05');
     });
   });
 }

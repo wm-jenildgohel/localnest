@@ -7,6 +7,7 @@ import 'package:test/test.dart';
 void main() {
   group('LocalNestTools', () {
     late Directory tempDir;
+    late Directory secondDir;
     late LocalNestTools tools;
 
     LocalNestConfig cfg({
@@ -27,6 +28,7 @@ void main() {
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('localnest_test_');
+      secondDir = await Directory.systemTemp.createTemp('localnest_test_2_');
 
       await Directory('${tempDir.path}/lib/src').create(recursive: true);
       await File('${tempDir.path}/lib/src/main.dart').writeAsString(
@@ -48,6 +50,9 @@ void main() {
     tearDown(() async {
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
+      }
+      if (await secondDir.exists()) {
+        await secondDir.delete(recursive: true);
       }
     });
 
@@ -76,6 +81,14 @@ void main() {
 
     test('search_code requires query', () async {
       final result = await tools.callTool('search_code', {'query': '   '});
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isTrue);
+      expect(structured['error'], 'query is required');
+    });
+
+    test('smart_context requires query', () async {
+      final result = await tools.callTool('smart_context', {'query': '   '});
       final structured = result['structuredContent'] as Map<String, dynamic>;
 
       expect(result['isError'], isTrue);
@@ -124,6 +137,48 @@ void main() {
       expect(secondStructured['meta']['cacheHit'], isTrue);
     });
 
+    test('smart_context returns matches and snippets in one call', () async {
+      final result = await tools.callTool('smart_context', {
+        'q': 'alpha',
+        'projectName': 'app',
+        'maxResults': 5,
+        'maxSnippets': 3,
+        'contextLines': 1,
+      });
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['matchCount'], greaterThan(0));
+      expect(structured['snippetCount'], greaterThan(0));
+      expect((structured['snippets'] as List).isNotEmpty, isTrue);
+    });
+
+    test('smart_context auto-scopes to first project when multiple configured', () async {
+      final multi = LocalNestTools(
+        LocalNestConfig(
+          projects: [
+            ProjectConfig(name: 'app', root: tempDir.path),
+            ProjectConfig(name: 'extra', root: secondDir.path),
+          ],
+          denyPatterns: const ['.env', 'secrets', 'node_modules/'],
+          exposeProjectRoots: false,
+          maxConcurrentSearches: 3,
+          searchTimeoutMs: 8000,
+          searchCacheTtlSeconds: 20,
+          searchCacheMaxEntries: 200,
+          allowBroadRoots: false,
+        ),
+      );
+
+      final result = await multi.callTool('smart_context', {'query': 'alpha'});
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['autoScoped'], isTrue);
+      expect(structured['effectiveProject'], 'app');
+      expect(structured['allProjects'], isFalse);
+    });
+
     test('get_file_snippet returns explicit line range', () async {
       final result = await tools.callTool('get_file_snippet', {
         'project': 'app',
@@ -155,6 +210,93 @@ void main() {
       expect(structured['startLine'], 2);
       expect(structured['endLine'], 4);
     });
+
+    test('search_code accepts query and project aliases', () async {
+      final result = await tools.callTool('search_code', {
+        'q': 'alpha',
+        'projectName': 'app',
+      });
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['count'], greaterThan(0));
+    });
+
+    test('get_file_snippet accepts path and line aliases', () async {
+      final result = await tools.callTool('get_file_snippet', {
+        'projectName': 'app',
+        'filePath': 'lib/src/main.dart',
+        'start': 2,
+        'end': 2,
+      });
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['startLine'], 2);
+      expect(structured['endLine'], 2);
+      expect((structured['snippet'] as String), contains('2: beta'));
+    });
+
+    test('get_file_snippet allows omitted project when only one exists', () async {
+      final result = await tools.callTool('get_file_snippet', {
+        'path': 'lib/src/main.dart',
+        'startLine': 1,
+        'endLine': 1,
+      });
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['project'], 'app');
+    });
+
+    test('get_repo_structure allows omitted project when only one exists', () async {
+      final result = await tools.callTool('get_repo_structure', {'maxDepth': 2});
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['project'], 'app');
+    });
+
+    test('get_file_snippet accepts absolute path inside project root', () async {
+      final absolutePath = '${tempDir.path}/lib/src/main.dart';
+      final result = await tools.callTool('get_file_snippet', {
+        'project': 'app',
+        'path': absolutePath,
+        'startLine': 1,
+        'endLine': 1,
+      });
+      final structured = result['structuredContent'] as Map<String, dynamic>;
+
+      expect(result['isError'], isFalse);
+      expect(structured['path'], 'lib/src/main.dart');
+    });
+
+    test(
+      'get_repo_structure requires project when multiple projects are configured',
+      () async {
+        final multi = LocalNestTools(
+          LocalNestConfig(
+            projects: [
+              ProjectConfig(name: 'app', root: tempDir.path),
+              ProjectConfig(name: 'extra', root: secondDir.path),
+            ],
+            denyPatterns: const ['.env', 'secrets', 'node_modules/'],
+            exposeProjectRoots: false,
+            maxConcurrentSearches: 3,
+            searchTimeoutMs: 8000,
+            searchCacheTtlSeconds: 20,
+            searchCacheMaxEntries: 200,
+            allowBroadRoots: false,
+          ),
+        );
+
+        final result = await multi.callTool('get_repo_structure', {});
+        final structured = result['structuredContent'] as Map<String, dynamic>;
+
+        expect(result['isError'], isTrue);
+        expect(structured['error'], contains('project is required'));
+      },
+    );
 
     test('get_file_snippet blocks path traversal', () async {
       final result = await tools.callTool('get_file_snippet', {
