@@ -19,6 +19,10 @@ import {
 import { WorkspaceService } from './services/workspace-service.js';
 import { SearchService } from './services/search-service.js';
 
+if (!process.env.DART_SUPPRESS_ANALYTICS) {
+  process.env.DART_SUPPRESS_ANALYTICS = 'true';
+}
+
 const runtime = buildRuntimeConfig(process.env);
 applyConsolePolicy(runtime.disableConsoleOutput);
 
@@ -215,6 +219,9 @@ registerJsonTool(
 async function main() {
   if (runtime.mcpMode !== 'stdio') {
     throw new Error('Unsupported MCP_MODE. Use MCP_MODE=stdio for MCP clients.');
+  }
+  if (!runtime.hasRipgrep) {
+    throw new Error('ripgrep (rg) is required. Install rg and restart localnest-mcp.');
   }
 
   const transport = new StdioServerTransport();

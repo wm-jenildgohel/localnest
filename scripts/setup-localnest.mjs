@@ -3,8 +3,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+
+if (!process.env.DART_SUPPRESS_ANALYTICS) {
+  process.env.DART_SUPPRESS_ANALYTICS = 'true';
+}
 
 const cwd = process.cwd();
 const localnestHome = path.resolve(process.env.LOCALNEST_HOME || path.join(os.homedir(), '.localnest'));
@@ -53,11 +58,43 @@ function collectSuggestions() {
   return unique;
 }
 
+function commandExists(cmd, args = ['--version']) {
+  try {
+    const result = spawnSync(cmd, args, { stdio: 'ignore' });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function getNpxCommand() {
+  return process.platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
+function runPreflightChecks() {
+  const errors = [];
+
+  const majorNode = Number.parseInt(process.versions.node.split('.')[0] || '0', 10);
+  if (!Number.isFinite(majorNode) || majorNode < 18) {
+    errors.push(`Node.js 18+ is required. Current: ${process.versions.node}`);
+  }
+
+  if (!commandExists(getNpxCommand())) {
+    errors.push('npx is not available. Install Node.js/npm correctly and retry.');
+  }
+
+  if (!commandExists('rg')) {
+    errors.push('ripgrep (rg) is required for efficient search. Install it and re-run setup.');
+  }
+
+  return { errors };
+}
+
 function buildClientSnippet(packageRef) {
   return {
     mcpServers: {
       localnest: {
-        command: 'npx',
+        command: getNpxCommand(),
         args: ['-y', packageRef],
         env: {
           MCP_MODE: 'stdio',
@@ -116,6 +153,14 @@ function printSuccess() {
 
 async function main() {
   const packageRef = parseArg('package') || process.env.LOCALNEST_NPX_PACKAGE || 'localnest-mcp';
+  const preflight = runPreflightChecks();
+  if (preflight.errors.length > 0) {
+    for (const err of preflight.errors) {
+      console.error(`[preflight:error] ${err}`);
+    }
+    process.exit(1);
+  }
+
   const pathsArg = parseArg('paths');
   if (pathsArg) {
     const roots = parseRootsFromPathsArg(pathsArg);

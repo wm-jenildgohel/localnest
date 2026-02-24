@@ -1,378 +1,118 @@
-# LocalNest
+# LocalNest MCP (Node.js)
 
-LocalNest is a local MCP server for code context.
+LocalNest is a local, read-only MCP server that lets AI tools inspect code in your selected project roots.
 
-It helps AI tools retrieve focused code context with a simple flow:
+## Requirements
 
-1. list projects
-2. search code
-3. fetch exact snippets
+- Node.js `>=18`
+- `npm` / `npx`
+- `ripgrep` (`rg`) required
 
-## Fastest Way (No Build Required)
+Install `ripgrep`:
+- Ubuntu/Debian: `sudo apt-get install ripgrep`
+- macOS (Homebrew): `brew install ripgrep`
+- Windows (winget): `winget install BurntSushi.ripgrep.MSVC`
+- Windows (choco): `choco install ripgrep`
 
-## 1) Install CLI from pub.dev
+## Why `rg` Is Required
 
+`localnest-mcp` is optimized for large multi-project workspaces. `ripgrep` is required because:
+- `search_code` depends on `rg` for fast indexed line search across many folders.
+- Without `rg`, search becomes significantly slower and less reliable for large repositories.
+- The server and setup intentionally fail fast when `rg` is missing, so users get explicit setup errors instead of degraded behavior.
+
+## Quick Start (No Global Install)
+
+1. Run setup:
 ```bash
-dart pub global activate localnest
+npx -y localnest-mcp-setup
 ```
 
-## 2) Setup config
-
+2. Run doctor:
 ```bash
-localnest --setup
+npx -y localnest-mcp-doctor
 ```
 
-`--setup` now auto-uses your current directory and infers project name.
-Use explicit values only when needed:
+3. Copy `mcpServers.localnest` from `~/.localnest/mcp.localnest.json` into your MCP client config.
+
+4. Restart your MCP client.
+
+Setup writes:
+- `~/.localnest/localnest.config.json`
+- `~/.localnest/mcp.localnest.json`
+
+## Local Dev (This Repo)
 
 ```bash
-localnest --setup --name scripts --root /absolute/path/to/Scripts
+npm install
+npm run setup
+npm run doctor
+npm start
 ```
 
-### 2.1 One-command setup + MCP integration (5-minute path)
-
-```bash
-localnest --setup --integrate
-```
-
-This will:
-- create/update LocalNest config
-- auto-write/update `.mcp.json` in current directory
-- register `mcpServers.localnest` with a working command for your machine
-
-Use a custom MCP config path when needed:
-
-```bash
-localnest --setup --integrate --mcp-file /absolute/path/to/.mcp.json
-```
-
-Client-root Flutter-only discovery (recommended for agency/client work):
-
-```bash
-localnest --setup --integrate --root /absolute/path/to/client/monorepo --name client --flutter-only
-```
-
-This scans subfolders and registers only directories that contain a Flutter `pubspec.yaml` block.
-
-## 3) Health check
-
-```bash
-localnest --doctor
-```
-
-## 3.1 Update check
-
-```bash
-localnest --check-update
-```
-
-## 3.2 Safe auto-upgrade + MCP repair
-
-```bash
-localnest --upgrade
-```
-
-This will:
-- check latest version from pub.dev
-- run `dart pub global activate localnest` when update is available
-- repair `localnest` MCP entry without touching other MCP servers
-- create a timestamped backup of existing `.mcp.json` before changes
-
-## 4) Inspect config
-
-```bash
-localnest --config
-```
-
-This prints:
-- resolved config file path
-- whether file exists
-- whether config is valid
-- repair command if config is broken
-
-## 5) Add to MCP config
-
-Recommended: use `localnest --setup --integrate` so LocalNest writes MCP config for you.
-Manual setup fallback: copy the exact MCP JSON snippet printed by `localnest --setup`.
-It now auto-selects a working command for your machine:
-- global binary (`~/.pub-cache/bin/localnest`) when available
-- source mode (`dart run /absolute/path/to/bin/localnest.dart`) when global binary is missing
+## MCP Config Example
 
 ```json
 {
   "mcpServers": {
     "localnest": {
-      "command": "localnest",
-      "args": [
-        "--config",
-        "/absolute/path/to/localnest.config.json"
-      ],
+      "command": "npx",
+      "args": ["-y", "localnest-mcp"],
       "env": {
-        "DART_SUPPRESS_ANALYTICS": "true",
-        "LOCALNEST_CONFIG": "/absolute/path/to/localnest.config.json"
+        "MCP_MODE": "stdio",
+        "LOCALNEST_CONFIG": "/Users/you/.localnest/localnest.config.json"
       }
     }
   }
 }
 ```
 
-## Production Configuration (Required)
+Windows note:
+- setup auto-generates `npx.cmd` in `mcp.localnest.json`.
 
-Use an absolute command path in production when possible. **Note:** GUI apps like Claude Desktop or Antigravity might not inherit your terminal's `PATH`.
+## Commands
 
-Valid MCP block:
+- `localnest-mcp`: starts MCP server via stdio
+- `localnest-mcp-setup`: interactive root setup
+- `localnest-mcp-doctor`: validates environment/config
 
-```json
-{
-  "mcpServers": {
-    "localnest": {
-      "command": "/home/<your_username>/.pub-cache/bin/localnest",
-      "args": [
-        "--config",
-        "/home/<your_username>/.localnest/config.json"
-      ],
-      "env": {
-        "DART_SUPPRESS_ANALYTICS": "true",
-        "LOCALNEST_CONFIG": "/home/<your_username>/.localnest/config.json"
-      }
-    }
-  }
-}
-```
-> ⚠️ **IMPORTANT:** Replace `<your_username>` with your actual system username. Use the exact JSON output provided by the `localnest --setup` command.
+From repo:
+- `npm run setup`
+- `npm run doctor`
+- `npm run check`
 
-Do not do this:
+## Publish
 
-```json
-{
-  "mcpServers": {
-    "localnest": {
-      "command": "localnest",
-      "args": [
-        "--config",
-        "/home/<your_username>/.localnest/config.json"
-      ],
-      "env": {
-        "DART_SUPPRESS_ANALYTICS": "true",
-        "LOCALNEST_CONFIG": "/home/<your_username>/.localnest/config.json"
-      }
-    }
-  }
-}
-```
-
-Reason: `command` might fail silently if `localnest` is not in the system `PATH` of the calling application.
-
-Required config file (`/home/<your_username>/.localnest/config.json`) example:
-
-```json
-{
-  "exposeProjectRoots": false,
-  "allowBroadRoots": false,
-  "maxConcurrentSearches": 4,
-  "searchTimeoutMs": 8000,
-  "searchCacheTtlSeconds": 20,
-  "searchCacheMaxEntries": 200,
-  "projects": [
-    {
-      "name": "prod",
-      "root": "/absolute/path/to/real/project"
-    }
-  ],
-  "denyPatterns": [
-    ".env",
-    ".pem",
-    ".key",
-    "secrets/",
-    "node_modules/",
-    ".git/",
-    "build/",
-    "dist/",
-    "coverage/"
-  ],
-  "vector": {
-    "enabled": false
-  }
-}
-```
-
-## Run From Source (Also No Build)
-
+Beta:
 ```bash
-cd localnest
-dart pub get
-dart run localnest --setup --name scripts --root /absolute/path/to/Scripts
-dart run localnest --doctor
-dart run localnest --config /absolute/path/to/localnest.config.json
+npm login
+npm run check
+npm run release:beta
 ```
 
-MCP config for source mode:
-
-```json
-{
-  "mcpServers": {
-    "localnest": {
-      "command": "dart",
-      "args": [
-        "run",
-        "/absolute/path/to/localnest/bin/localnest.dart",
-        "--config",
-        "/absolute/path/to/localnest.config.json"
-      ]
-    }
-  }
-}
-```
-
-## Optional: Native Binary Build
-
-Only needed if you want a standalone binary with faster startup.
-
+Stable:
 ```bash
-cd localnest
-./tool/build_exe.sh
-./build/localnest --config /absolute/path/to/localnest.config.json
+npm run release:latest
 ```
 
-## Tool Reference
-
-| Tool | Purpose | Typical Use |
-|---|---|---|
-| `smart_context` | One-call context retrieval | Preferred first call for AI agents |
-| `list_projects` | List project aliases | First call to discover targets |
-| `search_code` | Find matching files/lines | Locate implementation points |
-| `get_file_snippet` | Read exact line ranges | Pull context for AI response |
-| `get_repo_structure` | Lightweight tree view | Understand project layout |
-
-AI-friendly calling behavior:
-- `smart_context` is the primary tool for AI clients (single call returns matches + snippets)
-- `search_code` accepts `query`, `q`, `pattern`, or `text`
-- `search_code` accepts `project` or `projectName`
-- `get_file_snippet` accepts `project` or `projectName`, and `path`, `file`, or `filePath`
-- `get_file_snippet` accepts `aroundLine` or `line`, and `startLine`/`endLine` or `start`/`end`
-- `get_repo_structure` accepts `project` or `projectName`
-- when only one project is configured, `get_file_snippet` and `get_repo_structure` allow omitting `project`
-- `get_file_snippet` accepts both relative and absolute paths (must still resolve inside allowed roots)
-- MCP transport is tolerant to both `\r\n\r\n` and `\n\n` frame separators
-- `initialize` works with or without `protocolVersion` (defaults to latest supported)
-- server auto-initializes for `tools/list`/`tools/call` if a client skips initialize
-- `tools/call` accepts both `arguments` and `input`
-
-### `search_code` backend order
-
-1. `ripgrep` (`rg`)
-2. `git grep`
-3. bounded Dart file scan
-
-Result metadata:
-
-- `meta.cacheHit`
-- `meta.backends`
-- `meta.partial` (`true` if timeout/limits ended early)
-
-## CLI Commands
-
-| Command | What it does |
-|---|---|
-| `--setup` | Create/update config (defaults to current directory and inferred project name) |
-| `--doctor` | Check `dart`, `git`, `rg` and show install hints |
-| `--config` | Inspect default config path and validity |
-| `--config <path>` | Use explicit config path (inspect/manual run) |
-
-## Minimal Config
-
-```json
-{
-  "exposeProjectRoots": false,
-  "allowBroadRoots": false,
-  "maxConcurrentSearches": 4,
-  "searchTimeoutMs": 8000,
-  "searchCacheTtlSeconds": 20,
-  "searchCacheMaxEntries": 200,
-  "projects": [
-    { "name": "scripts", "root": "/absolute/path/to/Scripts" }
-  ],
-  "denyPatterns": [
-    ".env",
-    ".pem",
-    ".key",
-    "secrets/",
-    "node_modules/",
-    ".git/",
-    "build/",
-    "dist/",
-    "coverage/"
-  ],
-  "vector": {
-    "enabled": false
-  }
-}
-```
-
-> 📌 **Future Milestone Notice:** The `vector` configuration block is automatically generated as a placeholder for an upcoming feature. Currently, LocalNest relies entirely on `ripgrep`/`git grep` and does not require you to install Qdrant, Ollama, or any other vector tools to function fully.
-
-## Security Defaults
-
-- read-only tools only
-- path traversal blocked
-- deny-pattern filtering
-- root paths hidden by default
-- MCP frame size guards
-
-## Performance Tips
-
-1. Setup process automatically splits large parent directories via sub-projects for better performance.
-2. Query specific project aliases instead of giant roots.
-3. Keep `rg` installed for fast search.
-4. Tune `searchTimeoutMs` and `maxConcurrentSearches` per machine.
-
-## Troubleshooting
-
-### `localnest` command not found
-
-- ensure Dart global bin is on PATH
-- usually: `$HOME/.pub-cache/bin`
-
-### `fork/exec /home/.../.localnest: permission denied`
-
-- your MCP `command` is pointing to a directory
-- set `command` to `localnest` or `/home/<user>/.pub-cache/bin/localnest`
-
-### `No valid projects found in config`
-
-- `projects[]` is empty, invalid, or paths do not exist for current user
-- validate quickly:
-
+Pack test:
 ```bash
-localnest --config
+npm pack --dry-run
 ```
 
-- fix by re-running setup with a real path:
+## Config Priority
 
-```bash
-localnest --setup --name prod --root /absolute/path/to/real/project --config /home/<your_username>/.localnest/config.json
-```
+1. `PROJECT_ROOTS` env var
+2. `LOCALNEST_CONFIG` file
+3. current working directory fallback
 
-### Search is slow
+## Tools Exposed
 
-- run `--doctor` and install `rg`
-- lower scope by targeting a specific project alias
-
-### No results
-
-- check alias with `list_projects`
-- verify deny patterns are not filtering paths
-- try case-insensitive query (`caseSensitive: false`)
-
-## Dev Commands
-
-```bash
-dart format .
-dart analyze
-dart test
-./tool/build_exe.sh
-```
-
-## License
-
-MIT (`LICENSE`).
+- `server_status`
+- `usage_guide`
+- `list_roots`
+- `list_projects`
+- `project_tree`
+- `search_code`
+- `read_file`
+- `summarize_project`

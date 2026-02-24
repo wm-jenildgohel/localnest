@@ -1,10 +1,5 @@
-# https://dart.dev/guides/libraries/private-files
-# Created by `dart pub`
-.dart_tool/
-
-# LocalNest runtime/build artifacts
-build/
-localnest.config.json
+node_modules/
+.npm-cache/
 .localnest/
 .mcp.localnest.json
-.npm-cache/
+localnest.config.json

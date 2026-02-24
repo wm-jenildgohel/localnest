@@ -13,7 +13,7 @@ function parseIntEnv(value, fallback) {
 }
 
 export const SERVER_NAME = 'localnest';
-export const SERVER_VERSION = '1.0.0';
+export const SERVER_VERSION = '0.0.1-beta.1';
 
 export const DEFAULT_MAX_READ_LINES = 400;
 export const DEFAULT_MAX_RESULTS = 100;
