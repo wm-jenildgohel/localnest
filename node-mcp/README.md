@@ -1,36 +1,47 @@
-# LocalNest MCP Server (Node.js)
+# LocalNest MCP (Node.js)
 
-A local, read-only MCP server that lets AI agents inspect your local code projects safely.
+LocalNest MCP exposes local project code to AI agents through a safe, read-only Model Context Protocol server.
 
-## Zero-install UX (npx)
+## What this solves
 
-Users can run setup without installation:
+- Let agents inspect local codebases without broad filesystem access.
+- Keep access restricted to configured root directories.
+- Support large workspaces with fast search (`ripgrep`) and project auto-splitting.
+
+## Quick start
+
+1. Install dependencies:
+```bash
+npm install
+```
+2. Configure roots:
 ```bash
 npx -y localnest-mcp-setup
 ```
-If package is not yet published to npm, run from GitHub:
+3. Add MCP config in your client:
+```json
+{
+  "mcpServers": {
+    "localnest": {
+      "command": "node",
+      "args": ["/tmp/localnest-repo/node-mcp/src/localnest-mcp.js"],
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOCALNEST_CONFIG": "/tmp/localnest-repo/node-mcp/localnest.config.json"
+      }
+    }
+  }
+}
+```
+4. Restart MCP client.
+
+## npx usage (after npm publish)
+
 ```bash
-npx -y github:wm-jenildgohel/localnest#beta-node localnest-mcp-setup
+npx -y localnest-mcp-setup
 ```
 
-If needed, users can pass roots directly:
-```bash
-npx -y localnest-mcp-setup --paths="/absolute/path1,/absolute/path2"
-```
-
-This writes:
-- `~/.localnest/localnest.config.json`
-- `~/.localnest/mcp.localnest.json`
-
-Then copy `mcpServers.localnest` from `~/.localnest/mcp.localnest.json` into MCP client config.
-
-To generate snippet for a custom package/ref:
-```bash
-npx -y localnest-mcp-setup --package="github:wm-jenildgohel/localnest#beta-node"
-```
-
-## MCP client config (no install)
-
+MCP config:
 ```json
 {
   "mcpServers": {
@@ -46,87 +57,95 @@ npx -y localnest-mcp-setup --package="github:wm-jenildgohel/localnest#beta-node"
 }
 ```
 
-## Local dev setup (repo checkout)
+## GitHub-only usage (no npm publish)
 
 ```bash
-npm install
-npm run setup
+npx -y github:wm-jenildgohel/localnest#beta-node localnest-mcp-setup
+```
+
+## Configuration
+
+Root resolution priority:
+1. `PROJECT_ROOTS` env var
+2. `LOCALNEST_CONFIG`
+3. Current working directory fallback
+
+### `LOCALNEST_CONFIG` format
+
+```json
+{
+  "name": "localnest",
+  "version": 1,
+  "roots": [
+    { "label": "flutter", "path": "/mnt/.../Workspace/Flutter" }
+  ]
+}
+```
+
+### Optional env knobs
+
+- `MCP_MODE`: must be `stdio`
+- `LOCALNEST_RG_TIMEOUT_MS`: ripgrep timeout (default `15000`)
+- `LOCALNEST_AUTO_PROJECT_SPLIT`: `true|false` (default `true`)
+- `LOCALNEST_MAX_AUTO_PROJECTS`: max split projects (default `120`)
+- `LOCALNEST_EXTRA_PROJECT_MARKERS`: extra marker files (comma-separated)
+- `LOCALNEST_FORCE_SPLIT_CHILDREN`: force split workspace by first-level dirs (`true|false`)
+- `DISABLE_CONSOLE_OUTPUT`: suppress non-error logs
+
+## Tools
+
+- `server_status`: runtime capabilities and active config summary
+- `usage_guide`: recommended workflow for users and agents
+- `list_roots`: configured root paths
+- `list_projects`: discover projects under a root
+- `project_tree`: compact file tree for one project
+- `search_code`: fast content search (supports `all_roots`)
+- `read_file`: bounded line-window read
+- `summarize_project`: high-level project statistics
+
+## Recommended agent flow
+
+1. `server_status`
+2. `list_roots`
+3. `list_projects`
+4. `project_tree`
+5. `search_code`
+6. `read_file`
+
+This sequence minimizes token noise and improves relevance.
+
+## Performance guidance
+
+- Prefer project-level roots over giant umbrella roots when possible.
+- Use `search_code` with `project_path` instead of broad `all_roots`.
+- Keep `rg` installed for best performance.
+- Use narrow `glob` filters for large repositories.
+
+## Fallbacks for non-standard projects
+
+If auto-splitting misses projects:
+- Set `LOCALNEST_EXTRA_PROJECT_MARKERS`.
+- Set `LOCALNEST_FORCE_SPLIT_CHILDREN=true`.
+- Or pass explicit `project_path` in `search_code`.
+
+## Security model
+
+- Read-only operations only.
+- Access restricted to configured roots.
+- Ignores common heavy/system directories.
+- File-size and line-window limits reduce accidental over-read.
+
+## Development
+
+```bash
+npm run check
 npm start
 ```
 
-## Publish to npm
+## Publish
 
 ```bash
 npm login
 npm run check
 npm publish
 ```
-
-After publish, users can optionally install globally:
-```bash
-npm i -g localnest-mcp
-localnest-mcp-setup
-```
-
-## MCP name
-
-This server is registered as `localnest`.
-
-## Official requirements (MCP SDK)
-
-Based on official MCP sources:
-- Use the TypeScript/JavaScript SDK package: `@modelcontextprotocol/sdk`
-- Include `zod` for tool input schemas
-- Use stdio transport for local client integration (`StdioServerTransport`)
-- Do not write protocol-irrelevant output to `stdout` (use `stderr` for logs)
-- `MCP_MODE=stdio` is enforced for predictable MCP client behavior
-- Tools return structured MCP output (`structuredContent`) with schema validation
-
-## Config model
-
-Path roots are loaded in this order:
-1. `PROJECT_ROOTS` env var (highest priority)
-2. `LOCALNEST_CONFIG` JSON file path (or `./localnest.config.json` by default)
-3. Current working directory fallback
-
-`PROJECT_ROOTS` format:
-- `label=/absolute/path;label2=/absolute/path2`
-
-`localnest.config.json` format:
-```json
-{
-  "name": "localnest",
-  "version": 1,
-  "roots": [
-    { "label": "work", "path": "/Users/you/work" },
-    { "label": "personal", "path": "/Users/you/projects" }
-  ]
-}
-```
-
-## Tools exposed
-
-- `list_roots`: show configured local roots.
-- `list_projects`: list first-level project directories.
-- `project_tree`: compact tree view for a project.
-- `search_code`: text search across project files (`all_roots=true` to scan all configured roots).
-- `read_file`: bounded, line-numbered file chunk reader.
-- `summarize_project`: quick extension/file distribution summary.
-
-## Performance notes
-
-- `search_code` uses `ripgrep` (`rg`) automatically when available for fast scanning across many projects.
-- If `rg` is not installed, it falls back to pure Node.js scanning.
-- Tune ripgrep timeout with `LOCALNEST_RG_TIMEOUT_MS` (default `15000`).
-
-## Security model
-
-- Read-only access only.
-- Access restricted to configured roots.
-- Hidden/system and heavy directories are skipped (`.git`, `node_modules`, `.venv`, etc).
-- Per-file read size limit and line-window limits keep responses bounded.
-
-## Notes
-
-- This server is intended for local machines only.
-- You can run multiple server instances with different root sets for stricter isolation.

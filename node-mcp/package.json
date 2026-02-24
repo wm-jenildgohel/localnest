@@ -40,7 +40,7 @@
   "scripts": {
     "setup": "node scripts/setup-localnest.mjs",
     "start": "node src/localnest-mcp.js",
-    "check": "node --check src/localnest-mcp.js && node --check scripts/setup-localnest.mjs && node --check bin/localnest-mcp.js && node --check bin/localnest-mcp-setup.js",
+    "check": "node --check src/localnest-mcp.js && node --check src/config.js && node --check src/services/workspace-service.js && node --check src/services/search-service.js && node --check scripts/setup-localnest.mjs && node --check bin/localnest-mcp.js && node --check bin/localnest-mcp-setup.js",
     "prepublishOnly": "npm run check"
   },
   "dependencies": {
