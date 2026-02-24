@@ -145,6 +145,10 @@ Optional env vars:
 - `LOCALNEST_VECTOR_MAX_TERMS` (default: `80`)
 - `LOCALNEST_VECTOR_MAX_FILES` (default: `20000`)
 
+Runtime note:
+- `sqlite-vec` backend requires a Node runtime with `node:sqlite` support (Node 22+).
+- On older runtimes (for example Node 18 in some desktop MCP clients), LocalNest auto-falls back to `json` backend.
+
 ## Tools Exposed
 
 - `server_status`

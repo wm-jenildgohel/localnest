@@ -19,7 +19,6 @@ import {
 import { WorkspaceService } from './services/workspace-service.js';
 import { SearchService } from './services/search-service.js';
 import { VectorIndexService } from './services/vector-index-service.js';
-import { SqliteVecIndexService } from './services/sqlite-vec-index-service.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -41,17 +40,31 @@ const workspace = new WorkspaceService({
   forceSplitChildren: runtime.forceSplitChildren
 });
 
-const vectorIndex = runtime.indexBackend === 'sqlite-vec'
-  ? new SqliteVecIndexService({
-    workspace,
-    dbPath: runtime.sqliteDbPath,
-    sqliteVecExtensionPath: runtime.sqliteVecExtensionPath,
-    chunkLines: runtime.vectorChunkLines,
-    chunkOverlap: runtime.vectorChunkOverlap,
-    maxTermsPerChunk: runtime.vectorMaxTermsPerChunk,
-    maxIndexedFiles: runtime.vectorMaxIndexedFiles
-  })
-  : new VectorIndexService({
+let activeIndexBackend = runtime.indexBackend;
+
+async function createVectorIndex() {
+  if (runtime.indexBackend === 'sqlite-vec') {
+    try {
+      const { SqliteVecIndexService } = await import('./services/sqlite-vec-index-service.js');
+      return new SqliteVecIndexService({
+        workspace,
+        dbPath: runtime.sqliteDbPath,
+        sqliteVecExtensionPath: runtime.sqliteVecExtensionPath,
+        chunkLines: runtime.vectorChunkLines,
+        chunkOverlap: runtime.vectorChunkOverlap,
+        maxTermsPerChunk: runtime.vectorMaxTermsPerChunk,
+        maxIndexedFiles: runtime.vectorMaxIndexedFiles
+      });
+    } catch (error) {
+      activeIndexBackend = 'json';
+      process.stderr.write(
+        `[localnest-index] sqlite-vec unavailable on this Node runtime; falling back to json backend. ` +
+        `reason=${error?.code || error?.message || 'unknown'}\n`
+      );
+    }
+  }
+
+  return new VectorIndexService({
     workspace,
     indexPath: runtime.vectorIndexPath,
     chunkLines: runtime.vectorChunkLines,
@@ -59,6 +72,9 @@ const vectorIndex = runtime.indexBackend === 'sqlite-vec'
     maxTermsPerChunk: runtime.vectorMaxTermsPerChunk,
     maxIndexedFiles: runtime.vectorMaxIndexedFiles
   });
+}
+
+const vectorIndex = await createVectorIndex();
 
 const search = new SearchService({
   workspace,
@@ -134,7 +150,8 @@ registerJsonTool(
       rg_timeout_ms: runtime.rgTimeoutMs
     },
     vector_index: {
-      backend: runtime.indexBackend,
+      backend: activeIndexBackend,
+      requested_backend: runtime.indexBackend,
       index_path: runtime.vectorIndexPath,
       db_path: runtime.sqliteDbPath,
       chunk_lines: runtime.vectorChunkLines,
