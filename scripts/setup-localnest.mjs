@@ -15,6 +15,8 @@ const cwd = process.cwd();
 const localnestHome = path.resolve(process.env.LOCALNEST_HOME || path.join(os.homedir(), '.localnest'));
 const configPath = path.join(localnestHome, 'localnest.config.json');
 const snippetPath = path.join(localnestHome, 'mcp.localnest.json');
+const defaultDbPath = path.join(localnestHome, 'localnest.db');
+const defaultJsonIndexPath = path.join(localnestHome, 'localnest.index.json');
 const argv = process.argv.slice(2);
 
 function isDir(p) {
@@ -90,7 +92,7 @@ function runPreflightChecks() {
   return { errors };
 }
 
-function buildClientSnippet(packageRef) {
+function buildClientSnippet(packageRef, indexConfig) {
   return {
     mcpServers: {
       localnest: {
@@ -98,7 +100,10 @@ function buildClientSnippet(packageRef) {
         args: ['-y', packageRef],
         env: {
           MCP_MODE: 'stdio',
-          LOCALNEST_CONFIG: configPath
+          LOCALNEST_CONFIG: configPath,
+          LOCALNEST_INDEX_BACKEND: indexConfig.backend,
+          LOCALNEST_DB_PATH: indexConfig.dbPath,
+          LOCALNEST_INDEX_PATH: indexConfig.indexPath
         }
       }
     }
@@ -127,17 +132,26 @@ function parseRootsFromPathsArg(pathsArg) {
   return roots;
 }
 
-function saveOutputs(roots, packageRef) {
+function saveOutputs(roots, packageRef, indexConfig) {
   fs.mkdirSync(localnestHome, { recursive: true });
   const config = {
     name: 'localnest',
     version: 1,
     updatedAt: new Date().toISOString(),
-    roots
+    roots,
+    index: {
+      backend: indexConfig.backend,
+      dbPath: indexConfig.dbPath,
+      indexPath: indexConfig.indexPath,
+      chunkLines: indexConfig.chunkLines,
+      chunkOverlap: indexConfig.chunkOverlap,
+      maxTermsPerChunk: indexConfig.maxTermsPerChunk,
+      maxIndexedFiles: indexConfig.maxIndexedFiles
+    }
   };
 
   fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-  fs.writeFileSync(snippetPath, `${JSON.stringify(buildClientSnippet(packageRef), null, 2)}\n`, 'utf8');
+  fs.writeFileSync(snippetPath, `${JSON.stringify(buildClientSnippet(packageRef, indexConfig), null, 2)}\n`, 'utf8');
 }
 
 function printSuccess() {
@@ -148,7 +162,7 @@ function printSuccess() {
   console.log('Next steps:');
   console.log(`1) Copy mcpServers.localnest from ${snippetPath} into your MCP client config`);
   console.log('2) Restart your MCP client / AI tool');
-  console.log('3) Use tools: list_roots, list_projects, search_code, read_file');
+  console.log('3) Use tools: index_status, index_project, search_hybrid, read_file');
 }
 
 async function main() {
@@ -167,7 +181,15 @@ async function main() {
     if (roots.length === 0) {
       throw new Error('No valid directories provided in --paths');
     }
-    saveOutputs(roots, packageRef);
+    saveOutputs(roots, packageRef, {
+      backend: 'sqlite-vec',
+      dbPath: defaultDbPath,
+      indexPath: defaultJsonIndexPath,
+      chunkLines: 60,
+      chunkOverlap: 15,
+      maxTermsPerChunk: 80,
+      maxIndexedFiles: 20000
+    });
     printSuccess();
     return;
   }
@@ -185,7 +207,7 @@ async function main() {
   const rl = readline.createInterface({ input, output });
   try {
     console.log('LocalNest setup wizard');
-    console.log('This will configure project/data folders your MCP can expose to AI agents.');
+    console.log('This will configure project/data folders and indexing backend for LocalNest MCP.');
     console.log('');
 
     const suggestions = collectSuggestions();
@@ -240,7 +262,40 @@ async function main() {
       roots.push({ label: toLabel(fallback, 'cwd'), path: fallback });
     }
 
-    saveOutputs(roots, packageRef);
+    console.log('');
+    console.log('Index backend options:');
+    console.log('1) sqlite-vec (recommended): low-resource SQLite DB, durable, future-upgradable');
+    console.log('2) json: simplest file-based index (fallback compatibility mode)');
+    const backendAnswer = (await rl.question('Choose backend [1/2] (default 1): ')).trim();
+    const backend = backendAnswer === '2' ? 'json' : 'sqlite-vec';
+
+    const suggestedDbPath = defaultDbPath;
+    const dbPathInput = (await rl.question(`SQLite DB path [${suggestedDbPath}]: `)).trim();
+    const dbPath = path.resolve(expandHome(dbPathInput || suggestedDbPath));
+
+    const suggestedIndexPath = defaultJsonIndexPath;
+    const indexPathInput = (await rl.question(`JSON index path (fallback) [${suggestedIndexPath}]: `)).trim();
+    const indexPath = path.resolve(expandHome(indexPathInput || suggestedIndexPath));
+
+    const chunkLinesInput = (await rl.question('Chunk lines [60]: ')).trim();
+    const chunkOverlapInput = (await rl.question('Chunk overlap [15]: ')).trim();
+    const maxTermsInput = (await rl.question('Max terms per chunk [80]: ')).trim();
+    const maxFilesInput = (await rl.question('Max indexed files [20000]: ')).trim();
+
+    const chunkLines = Number.parseInt(chunkLinesInput || '60', 10) || 60;
+    const chunkOverlap = Number.parseInt(chunkOverlapInput || '15', 10) || 15;
+    const maxTermsPerChunk = Number.parseInt(maxTermsInput || '80', 10) || 80;
+    const maxIndexedFiles = Number.parseInt(maxFilesInput || '20000', 10) || 20000;
+
+    saveOutputs(roots, packageRef, {
+      backend,
+      dbPath,
+      indexPath,
+      chunkLines,
+      chunkOverlap,
+      maxTermsPerChunk,
+      maxIndexedFiles
+    });
     printSuccess();
   } finally {
     rl.close();

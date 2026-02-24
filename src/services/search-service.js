@@ -15,12 +15,13 @@ function globToRegExp(glob) {
 }
 
 export class SearchService {
-  constructor({ workspace, ignoreDirs, hasRipgrep, rgTimeoutMs, maxFileBytes }) {
+  constructor({ workspace, ignoreDirs, hasRipgrep, rgTimeoutMs, maxFileBytes, vectorIndex }) {
     this.workspace = workspace;
     this.ignoreDirs = ignoreDirs;
     this.hasRipgrep = hasRipgrep;
     this.rgTimeoutMs = rgTimeoutMs;
     this.maxFileBytes = maxFileBytes;
+    this.vectorIndex = vectorIndex;
   }
 
   searchCode({ query, projectPath, allRoots, glob, maxResults, caseSensitive }) {
@@ -149,5 +150,88 @@ export class SearchService {
         }
       }
     }
+  }
+
+  searchHybrid({
+    query,
+    projectPath,
+    allRoots,
+    glob,
+    maxResults,
+    caseSensitive,
+    minSemanticScore
+  }) {
+    const lexical = this.searchCode({
+      query,
+      projectPath,
+      allRoots,
+      glob,
+      maxResults: Math.max(maxResults * 3, maxResults),
+      caseSensitive
+    });
+
+    const semantic = this.vectorIndex
+      ? this.vectorIndex.semanticSearch({
+        query,
+        projectPath,
+        allRoots,
+        maxResults: Math.max(maxResults * 3, maxResults),
+        minScore: minSemanticScore
+      })
+      : [];
+
+    const k = 60;
+    const scored = new Map();
+
+    lexical.forEach((item, idx) => {
+      const key = `L:${item.file}:${item.line}`;
+      scored.set(key, {
+        type: 'lexical',
+        file: item.file,
+        line: item.line,
+        text: item.text,
+        lexical_rank: idx + 1,
+        lexical_score: 1 / (k + idx + 1),
+        semantic_rank: null,
+        semantic_score: 0
+      });
+    });
+
+    semantic.forEach((item, idx) => {
+      const key = `S:${item.file}:${item.start_line}:${item.end_line}`;
+      const existing = scored.get(key);
+      if (existing) {
+        existing.semantic_rank = idx + 1;
+        existing.semantic_score = 1 / (k + idx + 1);
+        return;
+      }
+
+      scored.set(key, {
+        type: 'semantic',
+        file: item.file,
+        start_line: item.start_line,
+        end_line: item.end_line,
+        snippet: item.snippet,
+        lexical_rank: null,
+        lexical_score: 0,
+        semantic_rank: idx + 1,
+        semantic_score: 1 / (k + idx + 1)
+      });
+    });
+
+    const fused = Array.from(scored.values())
+      .map((item) => ({
+        ...item,
+        rrf_score: item.lexical_score + item.semantic_score
+      }))
+      .sort((a, b) => b.rrf_score - a.rrf_score)
+      .slice(0, maxResults);
+
+    return {
+      query,
+      lexical_hits: lexical.length,
+      semantic_hits: semantic.length,
+      results: fused
+    };
   }
 }

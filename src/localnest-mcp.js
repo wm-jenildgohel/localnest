@@ -18,6 +18,8 @@ import {
 } from './config.js';
 import { WorkspaceService } from './services/workspace-service.js';
 import { SearchService } from './services/search-service.js';
+import { VectorIndexService } from './services/vector-index-service.js';
+import { SqliteVecIndexService } from './services/sqlite-vec-index-service.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -39,12 +41,32 @@ const workspace = new WorkspaceService({
   forceSplitChildren: runtime.forceSplitChildren
 });
 
+const vectorIndex = runtime.indexBackend === 'sqlite-vec'
+  ? new SqliteVecIndexService({
+    workspace,
+    dbPath: runtime.sqliteDbPath,
+    sqliteVecExtensionPath: runtime.sqliteVecExtensionPath,
+    chunkLines: runtime.vectorChunkLines,
+    chunkOverlap: runtime.vectorChunkOverlap,
+    maxTermsPerChunk: runtime.vectorMaxTermsPerChunk,
+    maxIndexedFiles: runtime.vectorMaxIndexedFiles
+  })
+  : new VectorIndexService({
+    workspace,
+    indexPath: runtime.vectorIndexPath,
+    chunkLines: runtime.vectorChunkLines,
+    chunkOverlap: runtime.vectorChunkOverlap,
+    maxTermsPerChunk: runtime.vectorMaxTermsPerChunk,
+    maxIndexedFiles: runtime.vectorMaxIndexedFiles
+  });
+
 const search = new SearchService({
   workspace,
   ignoreDirs: IGNORE_DIRS,
   hasRipgrep: runtime.hasRipgrep,
   rgTimeoutMs: runtime.rgTimeoutMs,
-  maxFileBytes: DEFAULT_MAX_FILE_BYTES
+  maxFileBytes: DEFAULT_MAX_FILE_BYTES,
+  vectorIndex
 });
 
 const server = new McpServer({
@@ -92,6 +114,15 @@ registerJsonTool(
       max_auto_projects: runtime.maxAutoProjects,
       force_split_children: runtime.forceSplitChildren,
       rg_timeout_ms: runtime.rgTimeoutMs
+    },
+    vector_index: {
+      backend: runtime.indexBackend,
+      index_path: runtime.vectorIndexPath,
+      db_path: runtime.sqliteDbPath,
+      chunk_lines: runtime.vectorChunkLines,
+      chunk_overlap: runtime.vectorChunkOverlap,
+      max_terms_per_chunk: runtime.vectorMaxTermsPerChunk,
+      max_indexed_files: runtime.vectorMaxIndexedFiles
     }
   })
 );
@@ -107,21 +138,25 @@ registerJsonTool(
     for_users: [
       'Run list_roots first to verify active roots.',
       'Use list_projects to discover projects under a root.',
-      'Use project_tree before deep searches to reduce noise.',
+      'Run index_project for your active project/root before semantic search.',
+      'Use search_hybrid for low-noise retrieval.',
       'Use read_file for targeted context windows.'
     ],
     for_ai_agents: [
       'Call server_status first to understand runtime capabilities.',
-      'Prefer search_code with project_path for precision.',
+      'Call index_status, then index_project when index is empty/stale.',
+      'Prefer search_hybrid with project_path for precision.',
+      'Use search_code for exact symbol/keyword fallback.',
       'Use all_roots only when cross-project lookup is required.',
-      'After search_code, call read_file with narrow line ranges.'
+      'After retrieval, call read_file with narrow line ranges.'
     ],
     tool_sequence: [
       'server_status',
       'list_roots',
       'list_projects',
-      'project_tree',
-      'search_code',
+      'index_status',
+      'index_project',
+      'search_hybrid',
       'read_file'
     ]
   })
@@ -165,6 +200,37 @@ registerJsonTool(
 );
 
 registerJsonTool(
+  'index_status',
+  {
+    title: 'Index Status',
+    description: 'Return local semantic index status and metadata.',
+    inputSchema: {}
+  },
+  async () => vectorIndex.getStatus()
+);
+
+registerJsonTool(
+  'index_project',
+  {
+    title: 'Index Project',
+    description: 'Build or refresh semantic index for a project or across all roots.',
+    inputSchema: {
+      project_path: z.string().optional(),
+      all_roots: z.boolean().default(false),
+      force: z.boolean().default(false),
+      max_files: z.number().int().min(1).max(200000).default(20000)
+    }
+  },
+  async ({ project_path, all_roots, force, max_files }) =>
+    vectorIndex.indexProject({
+      projectPath: project_path,
+      allRoots: all_roots,
+      force,
+      maxFiles: max_files
+    })
+);
+
+registerJsonTool(
   'search_code',
   {
     title: 'Search Code',
@@ -186,6 +252,33 @@ registerJsonTool(
       glob,
       maxResults: max_results,
       caseSensitive: case_sensitive
+    })
+);
+
+registerJsonTool(
+  'search_hybrid',
+  {
+    title: 'Search Hybrid',
+    description: 'Run lexical + semantic retrieval and return RRF-ranked results.',
+    inputSchema: {
+      query: z.string().min(1),
+      project_path: z.string().optional(),
+      all_roots: z.boolean().default(false),
+      glob: z.string().default('*'),
+      max_results: z.number().int().min(1).max(1000).default(DEFAULT_MAX_RESULTS),
+      case_sensitive: z.boolean().default(false),
+      min_semantic_score: z.number().min(0).max(1).default(0.05)
+    }
+  },
+  async ({ query, project_path, all_roots, glob, max_results, case_sensitive, min_semantic_score }) =>
+    search.searchHybrid({
+      query,
+      projectPath: project_path,
+      allRoots: all_roots,
+      glob,
+      maxResults: max_results,
+      caseSensitive: case_sensitive,
+      minSemanticScore: min_semantic_score
     })
 );
 

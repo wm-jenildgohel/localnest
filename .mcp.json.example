@@ -8,7 +8,10 @@
       ],
       "env": {
         "MCP_MODE": "stdio",
-        "LOCALNEST_CONFIG": "/Users/you/.localnest/localnest.config.json"
+        "LOCALNEST_CONFIG": "/Users/you/.localnest/localnest.config.json",
+        "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
+        "LOCALNEST_DB_PATH": "/Users/you/.localnest/localnest.db",
+        "LOCALNEST_INDEX_PATH": "/Users/you/.localnest/localnest.index.json"
       }
     }
   }
