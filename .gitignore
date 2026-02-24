@@ -5,3 +5,6 @@
 # LocalNest runtime/build artifacts
 build/
 localnest.config.json
+.localnest/
+.mcp.localnest.json
+.npm-cache/
