@@ -81,6 +81,24 @@ function toolResult(data) {
   };
 }
 
+function buildRipgrepHelpMessage() {
+  let install = 'Install ripgrep (rg), then restart localnest-mcp.';
+  if (process.platform === 'win32') {
+    install = 'Install ripgrep: winget install BurntSushi.ripgrep.MSVC';
+  } else if (process.platform === 'darwin') {
+    install = 'Install ripgrep: brew install ripgrep';
+  } else {
+    install = 'Install ripgrep: sudo apt-get install ripgrep';
+  }
+
+  return [
+    'ripgrep (rg) is required by localnest-mcp for fast code search.',
+    install,
+    'If rg is installed but MCP still fails, set PATH in your MCP client env.',
+    'Run doctor for detailed checks: npx -y localnest-mcp-doctor'
+  ].join(' ');
+}
+
 function registerJsonTool(name, { title, description, inputSchema }, handler) {
   server.registerTool(
     name,
@@ -314,7 +332,7 @@ async function main() {
     throw new Error('Unsupported MCP_MODE. Use MCP_MODE=stdio for MCP clients.');
   }
   if (!runtime.hasRipgrep) {
-    throw new Error('ripgrep (rg) is required. Install rg and restart localnest-mcp.');
+    throw new Error(buildRipgrepHelpMessage());
   }
 
   const transport = new StdioServerTransport();
