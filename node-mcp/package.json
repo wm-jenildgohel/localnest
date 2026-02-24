@@ -1,0 +1,50 @@
+{
+  "name": "localnest-mcp",
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "LocalNest",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/localnest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/localnest/issues"
+  },
+  "homepage": "https://github.com/your-org/localnest#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "localnest",
+    "ai",
+    "agents"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "description": "LocalNest read-only MCP server for exposing project context from local machine",
+  "bin": {
+    "localnest-mcp": "./bin/localnest-mcp.js",
+    "localnest-mcp-setup": "./bin/localnest-mcp-setup.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "node scripts/setup-localnest.mjs",
+    "start": "node src/localnest-mcp.js",
+    "check": "node --check src/localnest-mcp.js && node --check scripts/setup-localnest.mjs && node --check bin/localnest-mcp.js && node --check bin/localnest-mcp-setup.js",
+    "prepublishOnly": "npm run check"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "zod": "^3.25.0"
+  }
+}

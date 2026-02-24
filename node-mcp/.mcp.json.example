@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "localnest": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "localnest-mcp"
+      ],
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOCALNEST_CONFIG": "/Users/you/.localnest/localnest.config.json"
+      }
+    }
+  }
+}
