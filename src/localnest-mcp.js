@@ -90,10 +90,50 @@ const server = new McpServer({
   version: SERVER_VERSION
 });
 
-function toolResult(data) {
+const RESPONSE_FORMAT_SCHEMA = z.enum(['json', 'markdown']).default('json');
+
+function renderMarkdown(value, heading = 'Result') {
+  if (value === null || value === undefined) {
+    return `## ${heading}\n\nnull`;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `## ${heading}\n\n- (empty)`;
+    const preview = value
+      .map((item) => `- \`${JSON.stringify(item)}\``)
+      .join('\n');
+    return `## ${heading}\n\n${preview}`;
+  }
+  if (typeof value === 'object') {
+    const lines = Object.entries(value).map(([k, v]) => `- **${k}**: \`${typeof v === 'string' ? v : JSON.stringify(v)}\``);
+    return `## ${heading}\n\n${lines.join('\n')}`;
+  }
+  return `## ${heading}\n\n${String(value)}`;
+}
+
+function toolResult(data, responseFormat = 'json', markdownTitle = 'Result') {
+  const text = responseFormat === 'markdown'
+    ? renderMarkdown(data, markdownTitle)
+    : JSON.stringify(data, null, 2);
   return {
     structuredContent: { data },
-    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+    content: [{ type: 'text', text }]
+  };
+}
+
+function paginateItems(items, limit, offset) {
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(1000, limit)) : 100;
+  const safeOffset = Number.isFinite(offset) ? Math.max(0, offset) : 0;
+  const totalCount = items.length;
+  const paged = items.slice(safeOffset, safeOffset + safeLimit);
+  const nextOffset = safeOffset + safeLimit;
+  return {
+    total_count: totalCount,
+    count: paged.length,
+    limit: safeLimit,
+    offset: safeOffset,
+    has_more: nextOffset < totalCount,
+    next_offset: nextOffset < totalCount ? nextOffset : null,
+    items: paged
   };
 }
 
@@ -115,27 +155,48 @@ function buildRipgrepHelpMessage() {
   ].join(' ');
 }
 
-function registerJsonTool(name, { title, description, inputSchema }, handler) {
-  server.registerTool(
-    name,
-    {
-      title,
-      description,
-      inputSchema,
-      outputSchema: {
-        data: z.any()
+function registerJsonTool(names, { title, description, inputSchema, annotations, markdownTitle }, handler) {
+  const toolNames = Array.isArray(names) ? names : [names];
+  const schema = {
+    ...inputSchema,
+    response_format: RESPONSE_FORMAT_SCHEMA
+  };
+
+  for (const name of toolNames) {
+    server.registerTool(
+      name,
+      {
+        title,
+        description,
+        inputSchema: schema,
+        outputSchema: {
+          data: z.any()
+        },
+        annotations
+      },
+      async (args) => {
+        const incoming = args || {};
+        const responseFormat = incoming.response_format || 'json';
+        const { response_format, ...toolArgs } = incoming;
+        const data = await handler(toolArgs);
+        return toolResult(data, responseFormat, markdownTitle || title);
       }
-    },
-    async (args) => toolResult(await handler(args || {}))
-  );
+    );
+  }
 }
 
 registerJsonTool(
-  'server_status',
+  ['localnest_server_status', 'server_status'],
   {
     title: 'Server Status',
     description: 'Return runtime status and active configuration summary for this MCP server.',
-    inputSchema: {}
+    inputSchema: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   async () => ({
     name: SERVER_NAME,
@@ -163,65 +224,96 @@ registerJsonTool(
 );
 
 registerJsonTool(
-  'usage_guide',
+  ['localnest_usage_guide', 'usage_guide'],
   {
     title: 'Usage Guide',
     description: 'Return concise best-practice guidance for users and AI agents using this MCP.',
-    inputSchema: {}
+    inputSchema: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   async () => ({
     for_users: [
-      'Run list_roots first to verify active roots.',
-      'Use list_projects to discover projects under a root.',
-      'Run index_project for your active project/root before semantic search.',
-      'Use search_hybrid for low-noise retrieval.',
-      'Use read_file for targeted context windows.'
+      'Run localnest_list_roots first to verify active roots.',
+      'Use localnest_list_projects to discover projects under a root.',
+      'Run localnest_index_project for your active project/root before semantic search.',
+      'Use localnest_search_hybrid for low-noise retrieval.',
+      'Use localnest_read_file for targeted context windows.'
     ],
     for_ai_agents: [
-      'Call server_status first to understand runtime capabilities.',
-      'Call index_status, then index_project when index is empty/stale.',
-      'Prefer search_hybrid with project_path for precision.',
-      'Use search_code for exact symbol/keyword fallback.',
+      'Call localnest_server_status first to understand runtime capabilities.',
+      'Call localnest_index_status, then localnest_index_project when index is empty/stale.',
+      'Prefer localnest_search_hybrid with project_path for precision.',
+      'Use localnest_search_code for exact symbol/keyword fallback.',
       'Use all_roots only when cross-project lookup is required.',
-      'After retrieval, call read_file with narrow line ranges.'
+      'After retrieval, call localnest_read_file with narrow line ranges.'
     ],
     tool_sequence: [
-      'server_status',
-      'list_roots',
-      'list_projects',
-      'index_status',
-      'index_project',
-      'search_hybrid',
-      'read_file'
+      'localnest_server_status',
+      'localnest_list_roots',
+      'localnest_list_projects',
+      'localnest_index_status',
+      'localnest_index_project',
+      'localnest_search_hybrid',
+      'localnest_read_file'
     ]
   })
 );
 
 registerJsonTool(
-  'list_roots',
+  ['localnest_list_roots', 'list_roots'],
   {
     title: 'List Roots',
     description: 'List configured local roots available to this MCP server.',
-    inputSchema: {}
+    inputSchema: {
+      limit: z.number().int().min(1).max(1000).default(100),
+      offset: z.number().int().min(0).default(0)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
-  async () => workspace.listRoots()
+  async ({ limit, offset }) => paginateItems(workspace.listRoots(), limit, offset)
 );
 
 registerJsonTool(
-  'list_projects',
+  ['localnest_list_projects', 'list_projects'],
   {
     title: 'List Projects',
     description: 'List first-level project directories under a root.',
     inputSchema: {
       root_path: z.string().optional(),
-      max_entries: z.number().int().min(1).max(2000).default(300)
+      max_entries: z.number().int().min(1).max(1000).optional(),
+      limit: z.number().int().min(1).max(1000).default(100),
+      offset: z.number().int().min(0).default(0)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
-  async ({ root_path, max_entries }) => workspace.listProjects(root_path, max_entries)
+  async ({ root_path, max_entries, limit, offset }) => {
+    const effectiveLimit = max_entries || limit;
+    const projects = workspace.listProjects(root_path, 2000);
+    const paged = paginateItems(projects, effectiveLimit, offset);
+    return {
+      ...paged,
+      truncated_total: projects.length === 2000
+    };
+  }
 );
 
 registerJsonTool(
-  'project_tree',
+  ['localnest_project_tree', 'project_tree'],
   {
     title: 'Project Tree',
     description: 'Return a compact tree of files/directories for a project path.',
@@ -229,23 +321,35 @@ registerJsonTool(
       project_path: z.string(),
       max_depth: z.number().int().min(1).max(8).default(3),
       max_entries: z.number().int().min(1).max(10000).default(1500)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   async ({ project_path, max_depth, max_entries }) => workspace.projectTree(project_path, max_depth, max_entries)
 );
 
 registerJsonTool(
-  'index_status',
+  ['localnest_index_status', 'index_status'],
   {
     title: 'Index Status',
     description: 'Return local semantic index status and metadata.',
-    inputSchema: {}
+    inputSchema: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   async () => vectorIndex.getStatus()
 );
 
 registerJsonTool(
-  'index_project',
+  ['localnest_index_project', 'index_project'],
   {
     title: 'Index Project',
     description: 'Build or refresh semantic index for a project or across all roots.',
@@ -254,6 +358,12 @@ registerJsonTool(
       all_roots: z.boolean().default(false),
       force: z.boolean().default(false),
       max_files: z.number().int().min(1).max(200000).default(20000)
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
     }
   },
   async ({ project_path, all_roots, force, max_files }) =>
@@ -266,7 +376,7 @@ registerJsonTool(
 );
 
 registerJsonTool(
-  'search_code',
+  ['localnest_search_code', 'search_code'],
   {
     title: 'Search Code',
     description: 'Search text across files under a project/root and return matching lines.',
@@ -277,6 +387,12 @@ registerJsonTool(
       glob: z.string().default('*'),
       max_results: z.number().int().min(1).max(1000).default(DEFAULT_MAX_RESULTS),
       case_sensitive: z.boolean().default(false)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   async ({ query, project_path, all_roots, glob, max_results, case_sensitive }) =>
@@ -291,7 +407,7 @@ registerJsonTool(
 );
 
 registerJsonTool(
-  'search_hybrid',
+  ['localnest_search_hybrid', 'search_hybrid'],
   {
     title: 'Search Hybrid',
     description: 'Run lexical + semantic retrieval and return RRF-ranked results.',
@@ -303,6 +419,12 @@ registerJsonTool(
       max_results: z.number().int().min(1).max(1000).default(DEFAULT_MAX_RESULTS),
       case_sensitive: z.boolean().default(false),
       min_semantic_score: z.number().min(0).max(1).default(0.05)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   async ({ query, project_path, all_roots, glob, max_results, case_sensitive, min_semantic_score }) =>
@@ -318,7 +440,7 @@ registerJsonTool(
 );
 
 registerJsonTool(
-  'read_file',
+  ['localnest_read_file', 'read_file'],
   {
     title: 'Read File',
     description: 'Read a bounded chunk of a file with line numbers.',
@@ -326,19 +448,31 @@ registerJsonTool(
       path: z.string(),
       start_line: z.number().int().min(1).default(1),
       end_line: z.number().int().min(1).default(DEFAULT_MAX_READ_LINES)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   async ({ path, start_line, end_line }) => workspace.readFileChunk(path, start_line, end_line, 800)
 );
 
 registerJsonTool(
-  'summarize_project',
+  ['localnest_summarize_project', 'summarize_project'],
   {
     title: 'Summarize Project',
     description: 'Return a high-level summary of a project directory.',
     inputSchema: {
       project_path: z.string(),
       max_files: z.number().int().min(100).max(20000).default(3000)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   async ({ project_path, max_files }) => workspace.summarizeProject(project_path, max_files)

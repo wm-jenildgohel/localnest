@@ -1,6 +1,6 @@
 {
   "name": "localnest-mcp",
-  "version": "0.0.1-beta.1",
+  "version": "0.0.2-beta.2",
   "license": "MIT",
   "author": "LocalNest",
   "repository": {
@@ -43,6 +43,7 @@
     "setup": "node scripts/setup-localnest.mjs",
     "doctor": "node scripts/doctor-localnest.mjs",
     "start": "node src/localnest-mcp.js",
+    "test": "node --test",
     "check": "node --check src/localnest-mcp.js && node --check src/config.js && node --check src/migrations/config-migrator.js && node --check src/services/workspace-service.js && node --check src/services/search-service.js && node --check src/services/vector-index-service.js && node --check src/services/sqlite-vec-index-service.js && node --check scripts/setup-localnest.mjs && node --check scripts/doctor-localnest.mjs && node --check bin/localnest-mcp.js && node --check bin/localnest-mcp-setup.js && node --check bin/localnest-mcp-doctor.js",
     "prepublishOnly": "npm run check",
     "release:beta": "npm publish --tag beta",

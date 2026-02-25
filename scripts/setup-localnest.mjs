@@ -73,6 +73,10 @@ function getNpxCommand() {
   return process.platform === 'win32' ? 'npx.cmd' : 'npx';
 }
 
+function getGlobalCommand() {
+  return process.platform === 'win32' ? 'localnest-mcp.cmd' : 'localnest-mcp';
+}
+
 function runPreflightChecks() {
   const errors = [];
 
@@ -98,6 +102,23 @@ function buildClientSnippet(packageRef, indexConfig) {
       localnest: {
         command: getNpxCommand(),
         args: ['-y', packageRef],
+        env: {
+          MCP_MODE: 'stdio',
+          LOCALNEST_CONFIG: configPath,
+          LOCALNEST_INDEX_BACKEND: indexConfig.backend,
+          LOCALNEST_DB_PATH: indexConfig.dbPath,
+          LOCALNEST_INDEX_PATH: indexConfig.indexPath
+        }
+      }
+    }
+  };
+}
+
+function buildGlobalClientSnippet(indexConfig) {
+  return {
+    mcpServers: {
+      localnest: {
+        command: getGlobalCommand(),
         env: {
           MCP_MODE: 'stdio',
           LOCALNEST_CONFIG: configPath,
@@ -154,15 +175,25 @@ function saveOutputs(roots, packageRef, indexConfig) {
   fs.writeFileSync(snippetPath, `${JSON.stringify(buildClientSnippet(packageRef, indexConfig), null, 2)}\n`, 'utf8');
 }
 
-function printSuccess() {
+function printSuccess(packageRef, indexConfig) {
+  const globalSnippet = buildGlobalClientSnippet(indexConfig);
+  const npxSnippet = buildClientSnippet(packageRef, indexConfig);
+
   console.log('');
   console.log(`Saved root config: ${configPath}`);
   console.log(`Saved client snippet: ${snippetPath}`);
   console.log('');
   console.log('Next steps:');
-  console.log(`1) Copy mcpServers.localnest from ${snippetPath} into your MCP client config`);
+  console.log('1) Copy-paste this GLOBAL MCP config block into your client config:');
+  console.log('');
+  console.log(JSON.stringify(globalSnippet, null, 2));
+  console.log('');
   console.log('2) Restart your MCP client / AI tool');
-  console.log('3) Use tools: index_status, index_project, search_hybrid, read_file');
+  console.log('3) Use tools: localnest_index_status, localnest_index_project, localnest_search_hybrid, localnest_read_file');
+  console.log('');
+  console.log('Optional npx fallback snippet (also saved to file):');
+  console.log(`- ${snippetPath}`);
+  console.log(JSON.stringify(npxSnippet, null, 2));
 }
 
 async function main() {
@@ -190,7 +221,11 @@ async function main() {
       maxTermsPerChunk: 80,
       maxIndexedFiles: 20000
     });
-    printSuccess();
+    printSuccess(packageRef, {
+      backend: 'sqlite-vec',
+      dbPath: defaultDbPath,
+      indexPath: defaultJsonIndexPath
+    });
     return;
   }
 
@@ -296,7 +331,11 @@ async function main() {
       maxTermsPerChunk,
       maxIndexedFiles
     });
-    printSuccess();
+    printSuccess(packageRef, {
+      backend,
+      dbPath,
+      indexPath
+    });
   } finally {
     rl.close();
   }

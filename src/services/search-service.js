@@ -182,25 +182,41 @@ export class SearchService {
 
     const k = 60;
     const scored = new Map();
+    const lexicalLineKey = new Map();
 
     lexical.forEach((item, idx) => {
-      const key = `L:${item.file}:${item.line}`;
+      const key = `${item.file}:${item.line}:${item.line}`;
       scored.set(key, {
         type: 'lexical',
         file: item.file,
         line: item.line,
+        start_line: item.line,
+        end_line: item.line,
         text: item.text,
         lexical_rank: idx + 1,
         lexical_score: 1 / (k + idx + 1),
         semantic_rank: null,
         semantic_score: 0
       });
+      lexicalLineKey.set(`${item.file}:${item.line}`, key);
     });
 
     semantic.forEach((item, idx) => {
-      const key = `S:${item.file}:${item.start_line}:${item.end_line}`;
+      let mergedKey = null;
+      for (let line = item.start_line; line <= item.end_line; line += 1) {
+        const byLine = lexicalLineKey.get(`${item.file}:${line}`);
+        if (byLine) {
+          mergedKey = byLine;
+          break;
+        }
+      }
+      const key = mergedKey || `${item.file}:${item.start_line}:${item.end_line}`;
       const existing = scored.get(key);
       if (existing) {
+        existing.type = 'hybrid';
+        existing.start_line = Math.min(existing.start_line || item.start_line, item.start_line);
+        existing.end_line = Math.max(existing.end_line || item.end_line, item.end_line);
+        if (!existing.snippet) existing.snippet = item.snippet;
         existing.semantic_rank = idx + 1;
         existing.semantic_score = 1 / (k + idx + 1);
         return;
