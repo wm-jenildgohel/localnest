@@ -1,56 +1,52 @@
-# LocalNest MCP (Node.js)
+# LocalNest MCP
 
-LocalNest is a local, read-only MCP server that lets AI tools inspect code in your selected project roots.
+A local-first MCP server that gives AI agents safe, read-only access to your codebase — with optional semantic indexing for high-quality retrieval.
+
+## What It Does
+
+- **File discovery** — scoped, safe reads under configured roots
+- **Lexical search** — fast ripgrep-backed pattern/symbol search
+- **Semantic indexing** — `sqlite-vec` or JSON backend, fully local
+- **Hybrid retrieval** — lexical + semantic fusion with RRF ranking
+- **Project introspection** — roots, projects, tree, summaries
+
+All data stays on your machine. No external indexing service required.
 
 ## Requirements
 
 - Node.js `>=18`
-- `npm` / `npx`
-- `ripgrep` (`rg`) required
+- `ripgrep` (`rg`)
 
-Install `ripgrep`:
-- Ubuntu/Debian: `sudo apt-get install ripgrep`
-- macOS (Homebrew): `brew install ripgrep`
-- Windows (winget): `winget install BurntSushi.ripgrep.MSVC`
-- Windows (choco): `choco install ripgrep`
+Install ripgrep:
 
-## Why `rg` Is Required
+| Platform | Command |
+|---|---|
+| Ubuntu/Debian | `sudo apt-get install ripgrep` |
+| macOS | `brew install ripgrep` |
+| Windows (winget) | `winget install BurntSushi.ripgrep.MSVC` |
+| Windows (choco) | `choco install ripgrep` |
 
-`localnest-mcp` is optimized for large multi-project workspaces. `ripgrep` is required because:
-- `search_code` depends on `rg` for fast indexed line search across many folders.
-- Without `rg`, search becomes significantly slower and less reliable for large repositories.
-- The server and setup intentionally fail fast when `rg` is missing, so users get explicit setup errors instead of degraded behavior.
+## Installation
 
-## Quick Start (No Global Install)
-
-1. Run setup:
+**Global install (recommended):**
 ```bash
-npx -y localnest-mcp-setup
+npm install -g localnest-mcp
+localnest-mcp-install-skill
+localnest-mcp-setup
+localnest-mcp-doctor
 ```
 
-2. Run doctor:
+**npx fallback** (if global install is unavailable):
 ```bash
+npx -y localnest-mcp-setup
 npx -y localnest-mcp-doctor
 ```
 
-3. Copy `mcpServers.localnest` from `~/.localnest/mcp.localnest.json` into your MCP client config.
+> Global install is preferred — it gives more deterministic dependency resolution and avoids transient npx cache issues.
 
-4. Restart your MCP client.
+## MCP Client Configuration
 
-Setup writes:
-- `~/.localnest/localnest.config.json`
-- `~/.localnest/mcp.localnest.json`
-
-## Local Dev (This Repo)
-
-```bash
-npm install
-npm run setup
-npm run doctor
-npm start
-```
-
-## MCP Config Example
+After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client config, or use this template:
 
 ```json
 {
@@ -60,59 +56,103 @@ npm start
       "args": ["-y", "localnest-mcp"],
       "env": {
         "MCP_MODE": "stdio",
-        "LOCALNEST_CONFIG": "/Users/you/.localnest/localnest.config.json"
+        "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
+        "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
+        "LOCALNEST_DB_PATH": "~/.localnest/localnest.db",
+        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json"
       }
     }
   }
 }
 ```
 
-Windows note:
-- setup auto-generates `npx.cmd` in `mcp.localnest.json`.
+> **Windows:** Setup auto-generates `npx.cmd` in `mcp.localnest.json` — use that file directly.
 
-## Commands
+Restart your MCP client after updating the config.
 
-- `localnest-mcp`: starts MCP server via stdio
-- `localnest-mcp-setup`: interactive root setup
-- `localnest-mcp-doctor`: validates environment/config
+## Tools
 
-From repo:
-- `npm run setup`
-- `npm run doctor`
-- `npm run check`
+| Tool | Purpose |
+|---|---|
+| `localnest_usage_guide` | Best-practice guidance for agents — call this first when unsure |
+| `localnest_server_status` | Runtime config, roots, ripgrep status, index backend |
+| `localnest_list_roots` | List configured roots |
+| `localnest_list_projects` | List projects under a root |
+| `localnest_project_tree` | File/folder tree for a project |
+| `localnest_index_status` | Semantic index metadata (exists, stale, backend) |
+| `localnest_index_project` | Build or refresh semantic index |
+| `localnest_search_code` | Lexical search (exact symbols, regex, identifiers) |
+| `localnest_search_hybrid` | Hybrid search (lexical + semantic, RRF-ranked) |
+| `localnest_read_file` | Read a bounded line window from a file |
+| `localnest_summarize_project` | Language/extension breakdown for a project |
 
-## Publish
+All tools support `response_format: "json"` (default) or `"markdown"`.
 
-Beta:
-```bash
-npm login
-npm run check
-npm run release:beta
+Short aliases without the `localnest_` prefix are also supported (e.g. `server_status`, `search_hybrid`).
+
+**List tools** return pagination fields: `total_count`, `count`, `limit`, `offset`, `has_more`, `next_offset`, `items`.
+
+**Recommended agent workflow:**
+```
+localnest_server_status → localnest_list_roots → localnest_list_projects
+→ localnest_index_status → localnest_index_project
+→ localnest_search_hybrid → localnest_read_file
 ```
 
-Stable:
-```bash
-npm run release:latest
-```
+## Index Backend
 
-Pack test:
-```bash
-npm pack --dry-run
-```
+Choose during setup or via env var:
 
-## Config Priority
+| Backend | When to use |
+|---|---|
+| `sqlite-vec` | Recommended. Persistent SQLite DB, efficient for large repos. Requires Node 22+. |
+| `json` | Compatibility fallback for older Node runtimes. Auto-selected if sqlite-vec is unavailable. |
 
-1. `PROJECT_ROOTS` env var
+## Configuration Reference
+
+Setup writes two files:
+- `~/.localnest/localnest.config.json` — roots and project settings
+- `~/.localnest/mcp.localnest.json` — ready-to-paste MCP client config block
+
+**Config priority:**
+1. `PROJECT_ROOTS` environment variable
 2. `LOCALNEST_CONFIG` file
-3. current working directory fallback
+3. Current working directory (fallback)
 
-## Tools Exposed
+**Optional env vars:**
 
-- `server_status`
-- `usage_guide`
-- `list_roots`
-- `list_projects`
-- `project_tree`
-- `search_code`
-- `read_file`
-- `summarize_project`
+| Variable | Default | Description |
+|---|---|---|
+| `LOCALNEST_INDEX_BACKEND` | `sqlite-vec` | `sqlite-vec` or `json` |
+| `LOCALNEST_DB_PATH` | `~/.localnest/localnest.db` | SQLite database path |
+| `LOCALNEST_INDEX_PATH` | `~/.localnest/localnest.index.json` | JSON index path |
+| `LOCALNEST_SQLITE_VEC_EXTENSION` | — | Custom extension path |
+| `LOCALNEST_VECTOR_CHUNK_LINES` | `60` | Lines per index chunk |
+| `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | Overlap between chunks |
+| `LOCALNEST_VECTOR_MAX_TERMS` | `80` | Max terms per chunk |
+| `LOCALNEST_VECTOR_MAX_FILES` | `20000` | Max files per index run |
+
+## Auto-Migration
+
+On startup, LocalNest auto-migrates older config schemas. A non-destructive backup (`localnest.config.json.bak.<timestamp>`) is created before any migration. No manual setup rerun needed for normal upgrades.
+
+## Skill Distribution
+
+LocalNest ships with a bundled AI agent skill (`localnest-mcp`) for Claude Code, Cursor, Codex, and other supported clients.
+
+Run after `npm install`:
+```bash
+localnest-mcp-install-skill
+# Force reinstall:
+localnest-mcp-install-skill --force
+```
+
+**Install from GitHub via skills.sh:**
+```bash
+npx skills add https://github.com/wm-jenildgohel/localnest --skill localnest-mcp
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
+  

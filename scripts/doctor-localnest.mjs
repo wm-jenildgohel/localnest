@@ -38,6 +38,20 @@ function resolveConfigPath() {
   return path.join(home, 'localnest.config.json');
 }
 
+function resolveIndexBackend() {
+  const byEnv = (process.env.LOCALNEST_INDEX_BACKEND || '').trim();
+  if (byEnv) return byEnv;
+
+  const cfgPath = resolveConfigPath();
+  try {
+    if (!fs.existsSync(cfgPath)) return 'sqlite-vec';
+    const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    return parsed?.index?.backend || 'sqlite-vec';
+  } catch {
+    return 'sqlite-vec';
+  }
+}
+
 function checkNodeVersion() {
   const major = Number.parseInt(process.versions.node.split('.')[0] || '0', 10);
   if (Number.isFinite(major) && major >= 18) {
@@ -97,6 +111,24 @@ async function checkSdkImport() {
       ok: false,
       detail: `MCP SDK import failed: ${error?.code || error?.message || 'unknown error'}`,
       fix: 'If running from source, run npm install. If using npx package, reinstall and retry.'
+    };
+  }
+}
+
+async function checkSqliteBackend() {
+  if (resolveIndexBackend() !== 'sqlite-vec') {
+    return { id: 'sqlite_backend', ok: true, detail: 'sqlite-vec backend not selected' };
+  }
+
+  try {
+    await import('node:sqlite');
+    return { id: 'sqlite_backend', ok: true, detail: 'node:sqlite available for sqlite-vec backend' };
+  } catch {
+    return {
+      id: 'sqlite_backend',
+      ok: false,
+      detail: 'node:sqlite unavailable for sqlite-vec backend',
+      fix: 'Use Node.js 22+ or switch backend to json in setup.'
     };
   }
 }
@@ -188,6 +220,7 @@ async function main() {
     checkNpmNpx(),
     checkRipgrep(),
     await checkSdkImport(),
+    await checkSqliteBackend(),
     checkConfigFile()
   ];
 
