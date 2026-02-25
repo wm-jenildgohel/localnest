@@ -1,3 +1,4 @@
 interface:
   display_name: "LocalNest MCP"
-  short_description: "Setup and troubleshoot LocalNest MCP workflows"
+  short_description: "Install and use LocalNest MCP tools"
+  default_prompt: "Set up LocalNest MCP and run the recommended localnest_* retrieval workflow for end users."

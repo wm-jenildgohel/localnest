@@ -91,6 +91,19 @@ Optional flags/env:
 LOCALNEST_SKIP_SKILL_INSTALL=true npm install -g localnest-mcp
 ```
 
+## skills.sh Distribution
+
+To distribute this skill via the Skills ecosystem (`https://skills.sh/`), keep the skill in repo under:
+- `skills/localnest-mcp/SKILL.md`
+- `skills/localnest-mcp/agents/openai.yaml`
+
+Install directly from GitHub:
+```bash
+npx skills add https://github.com/wm-jenildgohel/localnest --skill localnest-mcp
+```
+
+After publishing/updating the repo, users can run that command to get the latest skill.
+
 ## MCP Config Example
 
 ```json
