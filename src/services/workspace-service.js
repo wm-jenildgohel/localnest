@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import readline from 'node:readline';
 import { expandHome } from '../config.js';
 
 export class WorkspaceService {
@@ -159,7 +160,7 @@ export class WorkspaceService {
     };
   }
 
-  readFileChunk(requestedPath, startLine, endLine, maxSpan) {
+  async readFileChunk(requestedPath, startLine, endLine, maxSpan) {
     let from = startLine;
     let to = endLine;
 
@@ -174,18 +175,56 @@ export class WorkspaceService {
       throw new Error('path is not a file');
     }
 
+    if (st.size > this.maxFileBytes) {
+      const { lines, totalLines } = await this.readLinesWindowStream(target, from, to);
+      const numbered = lines.map((line, idx) => `${from + idx}: ${line}`).join('\n');
+      return {
+        path: target,
+        start_line: from,
+        end_line: Math.min(to, totalLines),
+        total_lines: totalLines,
+        content: numbered,
+        warning: `File exceeds cap (${st.size} bytes > ${this.maxFileBytes} bytes). Returned streamed line-window content only.`,
+        file_size_bytes: st.size,
+        cap_bytes: this.maxFileBytes
+      };
+    }
+
     const content = this.safeReadText(target);
-    const lines = content.split(/\r?\n/);
-    const selected = lines.slice(from - 1, to);
+    const allLines = content.split(/\r?\n/);
+    const selected = allLines.slice(from - 1, to);
     const numbered = selected.map((line, idx) => `${from + idx}: ${line}`).join('\n');
 
     return {
       path: target,
       start_line: from,
-      end_line: Math.min(to, lines.length),
-      total_lines: lines.length,
+      end_line: Math.min(to, allLines.length),
+      total_lines: allLines.length,
       content: numbered
     };
+  }
+
+  async readLinesWindowStream(filePath, from, to) {
+    const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+    const rl = readline.createInterface({
+      input: stream,
+      crlfDelay: Infinity
+    });
+
+    const lines = [];
+    let lineNo = 0;
+    try {
+      for await (const line of rl) {
+        lineNo += 1;
+        if (lineNo >= from && lineNo <= to) {
+          lines.push(line);
+        }
+      }
+    } finally {
+      rl.close();
+    }
+
+    return { lines, totalLines: lineNo };
   }
 
   *walkDirectories(base) {

@@ -20,7 +20,7 @@ function parseStringEnv(value, fallback) {
 }
 
 export const SERVER_NAME = 'localnest';
-export const SERVER_VERSION = '0.0.1-beta.1';
+export const SERVER_VERSION = '0.0.2-beta.2';
 
 export const DEFAULT_MAX_READ_LINES = 400;
 export const DEFAULT_MAX_RESULTS = 100;

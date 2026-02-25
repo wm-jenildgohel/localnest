@@ -1,0 +1,3 @@
+interface:
+  display_name: "LocalNest MCP"
+  short_description: "Setup and troubleshoot LocalNest MCP workflows"

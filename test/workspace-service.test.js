@@ -66,7 +66,7 @@ test('resolveSearchBases auto split and fallback behavior', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('listProjects/projectTree/summarizeProject/readFileChunk flows', () => {
+test('listProjects/projectTree/summarizeProject/readFileChunk flows', async () => {
   const root = makeTempDir();
   const proj = path.join(root, 'proj');
   fs.mkdirSync(path.join(proj, 'src'), { recursive: true });
@@ -91,13 +91,33 @@ test('listProjects/projectTree/summarizeProject/readFileChunk flows', () => {
   assert.equal(summary.truncated, true);
   assert.equal(summary.files_counted, 1);
 
-  const chunk = service.readFileChunk(path.join(proj, 'src', 'main.js'), 3, 20, 2);
+  const chunk = await service.readFileChunk(path.join(proj, 'src', 'main.js'), 3, 20, 2);
   assert.equal(chunk.start_line, 3);
   assert.equal(chunk.end_line, 4);
   assert.match(chunk.content, /^3: c/m);
 
   const tinyLimitService = makeWorkspace(root, { maxFileBytes: 7 });
   assert.throws(() => tinyLimitService.safeReadText(path.join(proj, 'src', 'main.js')), /File too large/);
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('readFileChunk returns warning and content when file exceeds cap', async () => {
+  const root = makeTempDir();
+  const proj = path.join(root, 'proj');
+  fs.mkdirSync(path.join(proj, 'src'), { recursive: true });
+  const filePath = path.join(proj, 'src', 'large.js');
+  fs.writeFileSync(filePath, 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n', 'utf8');
+
+  const service = makeWorkspace(root, { maxFileBytes: 12 });
+  const chunk = await service.readFileChunk(filePath, 4, 7, 10);
+
+  assert.match(chunk.warning || '', /File exceeds cap/);
+  assert.equal(chunk.file_size_bytes > chunk.cap_bytes, true);
+  assert.equal(chunk.start_line, 4);
+  assert.equal(chunk.end_line, 7);
+  assert.match(chunk.content, /^4: l4/m);
+  assert.match(chunk.content, /^7: l7/m);
 
   fs.rmSync(root, { recursive: true, force: true });
 });

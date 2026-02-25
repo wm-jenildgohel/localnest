@@ -33,6 +33,7 @@ Install `ripgrep`:
 Recommended (stable): global install
 ```bash
 npm install -g localnest-mcp
+localnest-mcp-install-skill
 localnest-mcp-setup
 localnest-mcp-doctor
 ```
@@ -69,6 +70,26 @@ Setup writes:
 During setup, choose index backend:
 - `sqlite-vec` (recommended): persistent SQLite DB, efficient for large repos
 - `json`: compatibility fallback
+
+## Bundled Skill Distribution
+
+LocalNest now ships with a bundled Codex skill: `localnest-mcp`.
+
+Automatic install behavior:
+- On package install, LocalNest attempts to auto-install the bundled skill to `~/.agents/skills/localnest-mcp`.
+- In CI environments (`CI=true`), auto-install is skipped.
+
+Manual skill install/update command:
+```bash
+localnest-mcp-install-skill
+```
+
+Optional flags/env:
+- Force reinstall: `localnest-mcp-install-skill --force`
+- Skip auto-install on package install:
+```bash
+LOCALNEST_SKIP_SKILL_INSTALL=true npm install -g localnest-mcp
+```
 
 ## MCP Config Example
 
