@@ -54,18 +54,47 @@ function main() {
   if (fs.existsSync(targetSkillDir)) {
     if (!force) {
       if (!quiet) console.log(`[localnest-skill] already installed: ${targetSkillDir}`);
+      syncKnownToolLocations(sourceSkillDir, quiet, force);
       return;
     }
     fs.rmSync(targetSkillDir, { recursive: true, force: true });
   }
 
   copyDir(sourceSkillDir, targetSkillDir);
+  syncKnownToolLocations(sourceSkillDir, quiet, force);
 
   if (!quiet) {
     console.log('[localnest-skill] installed successfully');
     console.log(`[localnest-skill] source: ${sourceSkillDir}`);
     console.log(`[localnest-skill] target: ${targetSkillDir}`);
-    console.log('[localnest-skill] restart Codex to load new/updated skill');
+    console.log('[localnest-skill] restart your AI tool to load the updated skill');
+  }
+}
+
+// Known AI tool skill locations — extend as new tools adopt the skills spec.
+const KNOWN_TOOL_SKILL_DIRS = [
+  path.join(os.homedir(), '.claude', 'skills'),       // Claude Code
+  path.join(os.homedir(), '.cline', 'skills'),        // Cline
+  path.join(os.homedir(), '.continue', 'skills'),     // Continue
+];
+
+function syncKnownToolLocations(sourceSkillDir, quiet, force) {
+  for (const toolSkillsDir of KNOWN_TOOL_SKILL_DIRS) {
+    const dest = path.join(toolSkillsDir, 'localnest-mcp');
+    try {
+      if (fs.existsSync(dest)) {
+        if (!force) continue;
+        fs.rmSync(dest, { recursive: true, force: true });
+      }
+      // Only create if the parent tool directory already exists (tool is installed).
+      if (!fs.existsSync(toolSkillsDir)) {
+        fs.mkdirSync(toolSkillsDir, { recursive: true });
+      }
+      copyDir(sourceSkillDir, dest);
+      if (!quiet) console.log(`[localnest-skill] synced → ${dest}`);
+    } catch (err) {
+      if (!quiet) console.warn(`[localnest-skill] skipped ${dest}: ${err.message}`);
+    }
   }
 }
 

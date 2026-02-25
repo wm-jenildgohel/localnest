@@ -60,14 +60,26 @@ Default retrieval workflow:
 1. `localnest_server_status`
 2. `localnest_list_roots`
 3. `localnest_list_projects`
-4. `localnest_index_status`
-5. `localnest_index_project`
-6. `localnest_search_hybrid`
-7. `localnest_read_file`
+4. **`localnest_search_files`** ← start here for module/feature discovery
+5. `localnest_index_status`
+6. `localnest_index_project`
+7. `localnest_search_hybrid` ← for concept/content retrieval
+8. `localnest_read_file`
 
 Call `localnest_usage_guide` at any time to get embedded best-practice guidance from the server itself.
 
+### Finding modules by name (acronyms, domain terms)
+
+When looking for a module like "SSO", "payments", "IAM":
+1. **Use `localnest_search_files` first** — searches file paths and directory names. Far faster than content search for module discovery. Finds `sso.service.ts`, `auth/sso/`, `SSOController.js` immediately.
+2. **Try synonyms** — acronyms rarely appear consistently in code. SSO → try `oauth`, `saml`, `passport`, `auth`. Payments → try `stripe`, `billing`, `invoice`, `checkout`.
+3. **Then use `localnest_search_hybrid`** — once you know the file/directory, search for implementation details within that scope using `project_path`.
+4. **Last resort** — `localnest_search_code` with a regex like `(?i)sso|single.sign` for broad content scan.
+
 ## Tool Reference
+
+### `localnest_search_files`
+Searches file paths and names for a query string. **Use this first when looking for a module or feature by name.** Params: `query` (required), `project_path` (optional), `all_roots`, `max_results`, `case_sensitive` (default false). Returns `file`, `relative_path`, `name` per match.
 
 ### `localnest_usage_guide`
 Returns structured best-practice guidance for users and AI agents. No params. Call this when unsure about the correct workflow.

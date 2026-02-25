@@ -247,8 +247,10 @@ registerJsonTool(
     for_ai_agents: [
       'Call localnest_server_status first to understand runtime capabilities.',
       'Call localnest_index_status, then localnest_index_project when index is empty/stale.',
-      'Prefer localnest_search_hybrid with project_path for precision.',
-      'Use localnest_search_code for exact symbol/keyword fallback.',
+      'To find a module or feature by name (e.g. "SSO", "payments"), use localnest_search_files FIRST — it searches file paths and names, which is faster and more reliable than content search for module discovery.',
+      'For acronyms or domain terms (SSO, IAM, CRM), also try synonyms: SSO → oauth, saml, passport, auth. Use localnest_search_files with each variant.',
+      'Prefer localnest_search_hybrid with project_path for concept-level content retrieval.',
+      'Use localnest_search_code for exact symbol/keyword/regex matches in file contents.',
       'Use all_roots only when cross-project lookup is required.',
       'After retrieval, call localnest_read_file with narrow line ranges.'
     ],
@@ -256,9 +258,10 @@ registerJsonTool(
       'localnest_server_status',
       'localnest_list_roots',
       'localnest_list_projects',
+      'localnest_search_files → for module/feature discovery by name',
       'localnest_index_status',
       'localnest_index_project',
-      'localnest_search_hybrid',
+      'localnest_search_hybrid → for concept/content retrieval',
       'localnest_read_file'
     ]
   })
@@ -372,6 +375,35 @@ registerJsonTool(
       allRoots: all_roots,
       force,
       maxFiles: max_files
+    })
+);
+
+registerJsonTool(
+  ['localnest_search_files', 'search_files'],
+  {
+    title: 'Search Files',
+    description: 'Search file paths and names matching a query. Use this first when looking for a module, feature, or component by name (e.g. "sso", "payment", "auth"). Much faster than content search for module discovery, and handles cases where the keyword only appears in file/directory names.',
+    inputSchema: {
+      query: z.string().min(1),
+      project_path: z.string().optional(),
+      all_roots: z.boolean().default(false),
+      max_results: z.number().int().min(1).max(1000).default(DEFAULT_MAX_RESULTS),
+      case_sensitive: z.boolean().default(false)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  async ({ query, project_path, all_roots, max_results, case_sensitive }) =>
+    search.searchFiles({
+      query,
+      projectPath: project_path,
+      allRoots: all_roots,
+      maxResults: max_results,
+      caseSensitive: case_sensitive
     })
 );
 

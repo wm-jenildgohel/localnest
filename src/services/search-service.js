@@ -152,6 +152,53 @@ export class SearchService {
     }
   }
 
+  searchFiles({ query, projectPath, allRoots, maxResults, caseSensitive }) {
+    const bases = this.workspace.resolveSearchBases(projectPath, allRoots);
+    const regex = new RegExp(escapeRegex(query), caseSensitive ? '' : 'i');
+    const results = [];
+
+    for (const base of bases) {
+      if (this.hasRipgrep) {
+        try {
+          const args = ['--files', '--no-ignore-messages'];
+          for (const ignored of this.ignoreDirs) {
+            args.push('--glob', `!**/${ignored}/**`);
+          }
+          args.push(base);
+
+          const run = spawnSync('rg', args, {
+            encoding: 'utf8',
+            timeout: this.rgTimeoutMs,
+            maxBuffer: 32 * 1024 * 1024
+          });
+
+          if (!run.error && run.stdout) {
+            for (const filePath of run.stdout.split(/\r?\n/).filter(Boolean)) {
+              if (!regex.test(filePath)) continue;
+              const rel = path.relative(base, filePath).split(path.sep).join('/');
+              results.push({ file: filePath, relative_path: rel, name: path.basename(filePath) });
+              if (results.length >= maxResults) return results;
+            }
+            continue;
+          }
+        } catch {
+          // fall through to walk
+        }
+      }
+
+      for (const { files } of this.workspace.walkDirectories(base)) {
+        for (const filePath of files) {
+          if (!regex.test(filePath)) continue;
+          const rel = path.relative(base, filePath).split(path.sep).join('/');
+          results.push({ file: filePath, relative_path: rel, name: path.basename(filePath) });
+          if (results.length >= maxResults) return results;
+        }
+      }
+    }
+
+    return results;
+  }
+
   searchHybrid({
     query,
     projectPath,
