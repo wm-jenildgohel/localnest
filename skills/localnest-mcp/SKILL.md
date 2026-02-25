@@ -138,14 +138,15 @@ High-level summary: language breakdown, extension stats, file counts. Params: `p
 - All tools accept `response_format: "json"` (default, for processing) or `"markdown"` (for readable output).
 - For list tools, pass `limit` + `offset`; continue while `has_more` is true using `next_offset`.
 - Prefer `project_path` for focused retrieval. Use `all_roots=true` only for cross-project queries.
-- Tools also respond to short aliases: `server_status`, `list_roots`, `list_projects`, `project_tree`, `index_status`, `index_project`, `search_code`, `search_hybrid`, `read_file`, `summarize_project`, `usage_guide`.
+- Tools also respond to short aliases: `server_status`, `list_roots`, `list_projects`, `project_tree`, `index_status`, `index_project`, `search_files`, `search_code`, `search_hybrid`, `read_file`, `summarize_project`, `usage_guide`.
 
 ## Evidence-First Pattern
 
 1. Discover scope (`localnest_list_roots`, `localnest_list_projects`).
-2. Retrieve candidates (`localnest_search_code` or `localnest_search_hybrid`).
-3. Validate with exact lines (`localnest_read_file`).
-4. Answer with file-grounded results.
+2. **Find module/feature** (`localnest_search_files`) — search by path/name first.
+3. Retrieve content (`localnest_search_hybrid` or `localnest_search_code`) scoped to the found path.
+4. Validate with exact lines (`localnest_read_file`).
+5. Answer with file-grounded results.
 
 ## Troubleshooting
 
