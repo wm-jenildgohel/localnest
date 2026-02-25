@@ -3,9 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { buildBaseScopeClause, SqliteVecIndexService } from '../src/services/sqlite-vec-index-service.js';
 
-test('buildBaseScopeClause handles slash and backslash descendants', () => {
+const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
+const skipReason = nodeMajor < 22 ? `node:sqlite requires Node 22+ (current: ${process.versions.node})` : false;
+
+const { buildBaseScopeClause, SqliteVecIndexService } = skipReason
+  ? { buildBaseScopeClause: null, SqliteVecIndexService: null }
+  : await import('../src/services/sqlite-vec-index-service.js');
+
+test('buildBaseScopeClause handles slash and backslash descendants', { skip: skipReason }, () => {
   const bases = ['C:\\repo\\project', '/home/u/repo'];
   const scope = buildBaseScopeClause(bases);
 
@@ -17,7 +23,7 @@ test('buildBaseScopeClause handles slash and backslash descendants', () => {
   assert.equal(scope.params[5], '/home/u/repo\\%');
 });
 
-test('sqlite index updates df/norm incrementally across reindex', () => {
+test('sqlite index updates df/norm incrementally across reindex', { skip: skipReason }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-sqlite-test-'));
   const dbPath = path.join(tempRoot, 'idx.db');
   const target = path.join(tempRoot, 'a.js');
