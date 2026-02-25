@@ -140,15 +140,11 @@ On startup, LocalNest auto-migrates older config schemas. A non-destructive back
 
 LocalNest ships with a bundled AI agent skill (`localnest-mcp`) for Claude Code, Cursor, Codex, and other supported clients.
 
-**Auto-install:** Runs on package install. Skipped in CI (`CI=true`).
-
-**Manual install/update:**
+Run after `npm install`:
 ```bash
 localnest-mcp-install-skill
 # Force reinstall:
 localnest-mcp-install-skill --force
-# Skip on package install:
-LOCALNEST_SKIP_SKILL_INSTALL=true npm install -g localnest-mcp
 ```
 
 **Install from GitHub via skills.sh:**
