@@ -2,4 +2,5 @@ node_modules/
 .npm-cache/
 .localnest/
 .mcp.localnest.json
+.mcp.localnest.*.json
 localnest.config.json
