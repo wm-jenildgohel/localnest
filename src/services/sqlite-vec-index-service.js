@@ -1,21 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { tokenize, toSparsePairs } from './tokenizer.js';
 
-function tokenize(text) {
-  const matches = text.toLowerCase().match(/[a-z_][a-z0-9_]{1,39}/g);
-  return matches || [];
-}
-
-function toSparsePairs(tokens, maxTerms) {
-  const tf = new Map();
-  for (const token of tokens) {
-    tf.set(token, (tf.get(token) || 0) + 1);
-  }
-  return Array.from(tf.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxTerms);
-}
+const SCHEMA_VERSION = 2;
+const NORM_FULL_SCAN_THRESHOLD = 500;
 
 function makeFileSignature(st) {
   return `${st.mtimeMs}:${st.size}`;
@@ -109,16 +98,41 @@ export class SqliteVecIndexService {
         df INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS term_index (
+        term TEXT NOT NULL,
+        chunk_id TEXT NOT NULL,
+        PRIMARY KEY (term, chunk_id)
+      ) WITHOUT ROWID;
+
       CREATE INDEX IF NOT EXISTS idx_chunks_file ON chunks(file_path);
+      CREATE INDEX IF NOT EXISTS idx_term_index_term ON term_index(term);
     `);
 
     this._stmtGetDf = this.db.prepare('SELECT df FROM term_df WHERE term = ?');
     this._stmtSetMeta = this.db.prepare('INSERT OR REPLACE INTO index_meta(key, value) VALUES (?, ?)');
     this._stmtGetMeta = this.db.prepare('SELECT value FROM index_meta WHERE key = ?');
 
-    this.tryLoadSqliteVec();
     this.setMeta('backend', 'sqlite-vec');
-    this.setMeta('schema_version', '1');
+    this._runMigrations();
+    this.tryLoadSqliteVec();
+  }
+
+  _runMigrations() {
+    const current = Number.parseInt(this.getMeta('schema_version') || '0', 10);
+    if (current >= SCHEMA_VERSION) return;
+
+    if (current < SCHEMA_VERSION) {
+      // v0/v1 → v2: tokenizer changed — clear all indexed data so stale entries
+      // don't pollute search results. Agents must re-run index_project.
+      this.runInTransaction(() => {
+        this.db.exec('DELETE FROM chunks');
+        this.db.exec('DELETE FROM term_df');
+        this.db.exec('DELETE FROM term_index');
+        this.db.exec('DELETE FROM files');
+      });
+    }
+
+    this.setMeta('schema_version', String(SCHEMA_VERSION));
   }
 
   tryLoadSqliteVec() {
@@ -168,14 +182,21 @@ export class SqliteVecIndexService {
     let processed = 0;
     let skipped = 0;
     let removed = 0;
+    const failedFiles = [];
 
     const stmtSelectSig = this.db.prepare('SELECT signature FROM files WHERE path = ?');
     const stmtSelectChunkTermsByFile = this.db.prepare('SELECT id, terms_json FROM chunks WHERE file_path = ?');
+    const stmtDeleteTermIndexByFile = this.db.prepare(
+      'DELETE FROM term_index WHERE chunk_id IN (SELECT id FROM chunks WHERE file_path = ?)'
+    );
     const stmtDeleteChunks = this.db.prepare('DELETE FROM chunks WHERE file_path = ?');
     const stmtDeleteFile = this.db.prepare('DELETE FROM files WHERE path = ?');
     const stmtUpsertFile = this.db.prepare('INSERT OR REPLACE INTO files(path, signature, updated_at) VALUES (?, ?, ?)');
     const stmtInsertChunk = this.db.prepare(
       'INSERT OR REPLACE INTO chunks(id, file_path, start_line, end_line, preview, terms_json, norm) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    const stmtInsertTermIndex = this.db.prepare(
+      'INSERT OR IGNORE INTO term_index(term, chunk_id) VALUES (?, ?)'
     );
 
     const existingRows = this.db.prepare('SELECT path FROM files').all();
@@ -183,6 +204,7 @@ export class SqliteVecIndexService {
     const deltaDf = new Map();
     let deltaTotalChunks = 0;
 
+    // Phase 1: remove deleted/out-of-scope files in one transaction
     this.runInTransaction(() => {
       for (const row of existingRows) {
         if (!isUnderBase(row.path, bases)) continue;
@@ -192,13 +214,18 @@ export class SqliteVecIndexService {
             this.applyDfDeltaFromTermsJson(oldRow.terms_json, -1, deltaDf);
           }
           deltaTotalChunks -= oldRows.length;
+          stmtDeleteTermIndexByFile.run(row.path);
           stmtDeleteChunks.run(row.path);
           stmtDeleteFile.run(row.path);
           removed += 1;
         }
       }
+    });
 
-      for (const filePath of files) {
+    // Phase 2: process each file independently — a single file failure does not
+    // abort the rest of the index run (P0-2)
+    for (const filePath of files) {
+      try {
         const st = fs.statSync(filePath);
         const signature = makeFileSignature(st);
         const existing = stmtSelectSig.get(filePath);
@@ -219,25 +246,34 @@ export class SqliteVecIndexService {
           deltaTotalChunks -= existingChunkRows.length;
         }
 
-        stmtDeleteChunks.run(filePath);
-        stmtUpsertFile.run(filePath, signature, new Date().toISOString());
+        this.runInTransaction(() => {
+          stmtDeleteTermIndexByFile.run(filePath);
+          stmtDeleteChunks.run(filePath);
+          stmtUpsertFile.run(filePath, signature, new Date().toISOString());
 
-        for (const chunk of chunks) {
-          this.applyDfDeltaFromTerms(chunk.terms, 1, deltaDf);
-          stmtInsertChunk.run(
-            chunk.id,
-            filePath,
-            chunk.start_line,
-            chunk.end_line,
-            chunk.preview,
-            JSON.stringify(chunk.terms),
-            chunk.norm
-          );
-        }
+          for (const chunk of chunks) {
+            this.applyDfDeltaFromTerms(chunk.terms, 1, deltaDf);
+            stmtInsertChunk.run(
+              chunk.id,
+              filePath,
+              chunk.start_line,
+              chunk.end_line,
+              chunk.preview,
+              JSON.stringify(chunk.terms),
+              chunk.norm
+            );
+            for (const [term] of chunk.terms) {
+              stmtInsertTermIndex.run(term, chunk.id);
+            }
+          }
+        });
+
         deltaTotalChunks += chunks.length;
         processed += 1;
+      } catch (err) {
+        failedFiles.push({ path: filePath, error: String(err?.message || err) });
       }
-    });
+    }
 
     this.applyDfDeltas(deltaDf);
     const changedTerms = new Set(
@@ -260,6 +296,7 @@ export class SqliteVecIndexService {
       indexed_files: processed,
       skipped_files: skipped,
       removed_files: removed,
+      failed_files: failedFiles,
       total_files: status.total_files,
       total_chunks: status.total_chunks,
       db_path: this.dbPath,
@@ -285,13 +322,16 @@ export class SqliteVecIndexService {
 
     const baseScope = buildBaseScopeClause(bases);
     const termCandidates = queryTfPairs.map(([term]) => term).slice(0, 8);
-    const termClauses = termCandidates.map(() => 'terms_json LIKE ? ESCAPE \'\\\'');
-    const termParams = termCandidates.map((term) => `%\"${escapeLike(term)}\"%`);
+
+    // Use term_index for O(matching chunks) lookup instead of O(N) LIKE scan (P1-2)
+    const termPlaceholders = termCandidates.map(() => '?').join(',');
     const rows = this.db.prepare(
-      `SELECT file_path, start_line, end_line, preview, terms_json, norm
-       FROM chunks
-       WHERE (${baseScope.where}) AND (${termClauses.join(' OR ')})`
-    ).all(...baseScope.params, ...termParams);
+      `SELECT DISTINCT c.file_path, c.start_line, c.end_line, c.preview, c.terms_json, c.norm
+       FROM term_index ti
+       JOIN chunks c ON c.id = ti.chunk_id
+       WHERE ti.term IN (${termPlaceholders})
+         AND (${baseScope.where})`
+    ).all(...termCandidates, ...baseScope.params);
 
     const out = [];
     for (const row of rows) {
@@ -425,13 +465,18 @@ export class SqliteVecIndexService {
     const stmtUpdateNorm = this.db.prepare('UPDATE chunks SET norm = ? WHERE id = ?');
 
     let rows = [];
-    if (totalChunksChanged) {
+
+    // P0-4: only do full table scan when changedTerms is large enough to make
+    // targeted lookup more expensive. For small incremental updates, use the
+    // term-targeted LIKE scan even when totalChunks changed — the IDF drift from
+    // a small N change is imperceptible in practice.
+    if (totalChunksChanged && changedTerms.size > NORM_FULL_SCAN_THRESHOLD) {
       rows = this.db.prepare('SELECT id, terms_json FROM chunks').all();
     } else if (changedTerms.size > 0) {
-      const stmtByTerm = this.db.prepare('SELECT id, terms_json FROM chunks WHERE terms_json LIKE ? ESCAPE \'\\\'');
+      const stmtByTerm = this.db.prepare("SELECT id, terms_json FROM chunks WHERE terms_json LIKE ? ESCAPE '\\'");
       const byId = new Map();
       for (const term of changedTerms) {
-        const pattern = `%\"${escapeLike(term)}\"%`;
+        const pattern = `%"${escapeLike(term)}"%`;
         for (const row of stmtByTerm.all(pattern)) {
           if (!byId.has(row.id)) byId.set(row.id, row);
         }

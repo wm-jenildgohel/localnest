@@ -54,6 +54,7 @@ After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client
     "localnest": {
       "command": "npx",
       "args": ["-y", "localnest-mcp"],
+      "startup_timeout_sec": 30,
       "env": {
         "MCP_MODE": "stdio",
         "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
@@ -69,6 +70,13 @@ After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client
 > **Windows:** Setup auto-generates `npx.cmd` in `mcp.localnest.json` — use that file directly.
 
 Restart your MCP client after updating the config.
+
+If your client reports MCP startup timeout (for example 10s default), increase it:
+
+```toml
+[mcp_servers.localnest]
+startup_timeout_sec = 30
+```
 
 ## Tools
 

@@ -1,20 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-
-function tokenize(text) {
-  const matches = text.toLowerCase().match(/[a-z_][a-z0-9_]{1,39}/g);
-  return matches || [];
-}
-
-function toSparsePairs(tokens, maxTerms) {
-  const tf = new Map();
-  for (const token of tokens) {
-    tf.set(token, (tf.get(token) || 0) + 1);
-  }
-  return Array.from(tf.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxTerms);
-}
+import { tokenize, toSparsePairs } from './tokenizer.js';
 
 function makeFileSignature(st) {
   return `${st.mtimeMs}:${st.size}`;
@@ -96,6 +82,7 @@ export class VectorIndexService {
     let processed = 0;
     let skipped = 0;
     let removed = 0;
+    const failedFiles = [];
 
     for (const filePath of Object.keys(this.data.documents)) {
       if (!isUnderBase(filePath, bases)) continue;
@@ -106,19 +93,23 @@ export class VectorIndexService {
     }
 
     for (const filePath of files) {
-      const st = fs.statSync(filePath);
-      const signature = makeFileSignature(st);
-      const existing = this.data.documents[filePath];
+      try {
+        const st = fs.statSync(filePath);
+        const signature = makeFileSignature(st);
+        const existing = this.data.documents[filePath];
 
-      if (!force && existing && existing.signature === signature) {
-        skipped += 1;
-        continue;
+        if (!force && existing && existing.signature === signature) {
+          skipped += 1;
+          continue;
+        }
+
+        const text = this.workspace.safeReadText(filePath);
+        const chunks = this.chunkFile(filePath, text);
+        this.data.documents[filePath] = { signature, chunks };
+        processed += 1;
+      } catch (err) {
+        failedFiles.push({ path: filePath, error: String(err?.message || err) });
       }
-
-      const text = this.workspace.safeReadText(filePath);
-      const chunks = this.chunkFile(filePath, text);
-      this.data.documents[filePath] = { signature, chunks };
-      processed += 1;
     }
 
     this.rebuildStats();
@@ -130,6 +121,7 @@ export class VectorIndexService {
       indexed_files: processed,
       skipped_files: skipped,
       removed_files: removed,
+      failed_files: failedFiles,
       total_files: this.data.total_files,
       total_chunks: this.data.total_chunks,
       index_path: this.indexPath

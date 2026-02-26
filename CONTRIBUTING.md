@@ -22,6 +22,11 @@ npm run check
 npm test
 ```
 
+**Run full code quality pipeline (lint, coverage, cycles, deps, package, audit):**
+```bash
+npm run quality
+```
+
 **Start the MCP server locally:**
 ```bash
 npm start
@@ -41,10 +46,11 @@ src/
   migrations/
     config-migrator.js          # Auto-migration for older config schemas
   services/
+    tokenizer.js                # Shared tokenizer (camelCase, digit, kebab splitting)
     workspace-service.js        # File discovery, tree, reads, project listing
     search-service.js           # Lexical + hybrid search orchestration
     vector-index-service.js     # JSON-backend semantic index
-    sqlite-vec-index-service.js # sqlite-vec backend semantic index
+    sqlite-vec-index-service.js # sqlite-vec backend: TF-IDF, inverted index, schema migrations
 scripts/
   setup-localnest.mjs           # Interactive setup CLI
   doctor-localnest.mjs          # Health check CLI
@@ -80,14 +86,16 @@ cp skills/localnest-mcp/SKILL.md ~/.agents/skills/localnest-mcp/SKILL.md
 ### Index backends
 
 - `VectorIndexService` (`vector-index-service.js`) — JSON backend, works on all Node versions
-- `SqliteVecIndexService` (`sqlite-vec-index-service.js`) — sqlite-vec backend, requires Node 22+
+- `SqliteVecIndexService` (`sqlite-vec-index-service.js`) — sqlite-vec backend, requires Node 22+; uses `term_index` inverted index for fast semantic lookup
 
-The server auto-falls back to JSON if sqlite-vec is unavailable. Both implement the same interface.
+The server auto-falls back to JSON if sqlite-vec is unavailable. Both implement the same interface and share the tokenizer from `services/tokenizer.js`.
+
+Changing the tokenizer requires a `SCHEMA_VERSION` bump in `sqlite-vec-index-service.js` and a corresponding `_runMigrations()` branch that clears stale index data.
 
 ## Pull Request Guidelines
 
 - Keep PRs focused — one concern per PR
-- Run `npm run check` and `npm test` before opening a PR
+- Run `npm run quality` before opening a PR
 - Update `skills/localnest-mcp/SKILL.md` if you add or change any tool
 - Do not bump the version — maintainers handle releases
 

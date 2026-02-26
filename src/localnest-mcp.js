@@ -177,7 +177,8 @@ function registerJsonTool(names, { title, description, inputSchema, annotations,
       async (args) => {
         const incoming = args || {};
         const responseFormat = incoming.response_format || 'json';
-        const { response_format, ...toolArgs } = incoming;
+        const toolArgs = { ...incoming };
+        delete toolArgs.response_format;
         const data = await handler(toolArgs);
         return toolResult(data, responseFormat, markdownTitle || title);
       }
@@ -411,14 +412,16 @@ registerJsonTool(
   ['localnest_search_code', 'search_code'],
   {
     title: 'Search Code',
-    description: 'Search text across files under a project/root and return matching lines.',
+    description: 'Search text across files under a project/root and return matching lines. Best for exact symbol names, imports, or known identifiers. Use use_regex=true for patterns (e.g. "async\\s+function\\s+get\\w+"). Use context_lines to include surrounding lines with each match.',
     inputSchema: {
       query: z.string().min(1),
       project_path: z.string().optional(),
       all_roots: z.boolean().default(false),
       glob: z.string().default('*'),
       max_results: z.number().int().min(1).max(1000).default(DEFAULT_MAX_RESULTS),
-      case_sensitive: z.boolean().default(false)
+      case_sensitive: z.boolean().default(false),
+      context_lines: z.number().int().min(0).max(10).default(0),
+      use_regex: z.boolean().default(false)
     },
     annotations: {
       readOnlyHint: true,
@@ -427,14 +430,16 @@ registerJsonTool(
       openWorldHint: false
     }
   },
-  async ({ query, project_path, all_roots, glob, max_results, case_sensitive }) =>
+  async ({ query, project_path, all_roots, glob, max_results, case_sensitive, context_lines, use_regex }) =>
     search.searchCode({
       query,
       projectPath: project_path,
       allRoots: all_roots,
       glob,
       maxResults: max_results,
-      caseSensitive: case_sensitive
+      caseSensitive: case_sensitive,
+      contextLines: context_lines,
+      useRegex: use_regex
     })
 );
 
@@ -514,8 +519,14 @@ async function main() {
   if (runtime.mcpMode !== 'stdio') {
     throw new Error('Unsupported MCP_MODE. Use MCP_MODE=stdio for MCP clients.');
   }
+
+  // P0-1: downgrade missing ripgrep from fatal to a startup warning.
+  // SearchService has a JS filesystem walk fallback for all search paths.
   if (!runtime.hasRipgrep) {
-    throw new Error(buildRipgrepHelpMessage());
+    process.stderr.write(
+      `[localnest-mcp] warning: ripgrep (rg) not found — search_code and search_hybrid ` +
+      `will use slower JS fallback. ${buildRipgrepHelpMessage()}\n`
+    );
   }
 
   const transport = new StdioServerTransport();

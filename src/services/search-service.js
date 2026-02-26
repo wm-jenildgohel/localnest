@@ -14,6 +14,15 @@ function globToRegExp(glob) {
   );
 }
 
+function validateRegex(pattern) {
+  try {
+    new RegExp(pattern);
+    return { valid: true };
+  } catch (e) {
+    return { valid: false, reason: e.message };
+  }
+}
+
 export class SearchService {
   constructor({ workspace, ignoreDirs, hasRipgrep, rgTimeoutMs, maxFileBytes, vectorIndex }) {
     this.workspace = workspace;
@@ -24,7 +33,7 @@ export class SearchService {
     this.vectorIndex = vectorIndex;
   }
 
-  searchCode({ query, projectPath, allRoots, glob, maxResults, caseSensitive }) {
+  searchCode({ query, projectPath, allRoots, glob, maxResults, caseSensitive, contextLines = 0, useRegex = false }) {
     const bases = this.workspace.resolveSearchBases(projectPath, allRoots);
     for (const base of bases) {
       const normalized = this.workspace.normalizeTarget(base);
@@ -33,7 +42,16 @@ export class SearchService {
       }
     }
 
-    const regex = new RegExp(escapeRegex(query), caseSensitive ? '' : 'i');
+    if (useRegex) {
+      const check = validateRegex(query);
+      if (!check.valid) {
+        throw new Error(`Invalid regex: ${check.reason}`);
+      }
+    }
+
+    const regex = useRegex
+      ? new RegExp(query, caseSensitive ? '' : 'i')
+      : new RegExp(escapeRegex(query), caseSensitive ? '' : 'i');
     const wildcardPattern = globToRegExp(glob);
 
     const matches = [];
@@ -45,7 +63,9 @@ export class SearchService {
             base,
             glob,
             caseSensitive,
-            maxResults: maxResults - matches.length
+            maxResults: maxResults - matches.length,
+            contextLines,
+            useRegex
           });
           matches.push(...fastMatches);
           if (matches.length >= maxResults) {
@@ -62,7 +82,8 @@ export class SearchService {
         regex,
         wildcardPattern,
         maxResults,
-        into: matches
+        into: matches,
+        contextLines
       });
 
       if (matches.length >= maxResults) {
@@ -73,23 +94,29 @@ export class SearchService {
     return matches.slice(0, maxResults);
   }
 
-  fastSearchWithRipgrep({ query, base, glob, caseSensitive, maxResults }) {
+  fastSearchWithRipgrep({ query, base, glob, caseSensitive, maxResults, contextLines = 0, useRegex = false }) {
     const args = [
       '--line-number',
       '--no-heading',
       '--color',
       'never',
       '--no-ignore-messages',
-      '--fixed-strings',
       '--max-filesize',
       `${Math.max(1, Math.floor(this.maxFileBytes / 1024))}K`
     ];
 
+    if (!useRegex) args.push('--fixed-strings');
     if (!caseSensitive) args.push('-i');
     if (glob && glob !== '*') args.push('--glob', glob);
 
     for (const ignored of this.ignoreDirs) {
       args.push('--glob', `!**/${ignored}/**`);
+    }
+
+    const ctxN = Math.max(0, Math.min(10, contextLines || 0));
+    if (ctxN > 0) {
+      // Use --json for structured context output — avoids separator ambiguity
+      args.push('--json', '-C', String(ctxN));
     }
 
     args.push(query, base);
@@ -105,6 +132,12 @@ export class SearchService {
     const out = run.stdout || '';
     if (!out.trim()) return [];
 
+    return ctxN > 0
+      ? this._parseRipgrepJsonOutput(out, maxResults)
+      : this._parseRipgrepPlainOutput(out, maxResults);
+  }
+
+  _parseRipgrepPlainOutput(out, maxResults) {
     const matches = [];
     const lines = out.split(/\r?\n/).filter(Boolean);
     for (const row of lines) {
@@ -122,11 +155,54 @@ export class SearchService {
       matches.push({ file, line, text });
       if (matches.length >= maxResults) break;
     }
+    return matches;
+  }
+
+  _parseRipgrepJsonOutput(out, maxResults) {
+    const matches = [];
+    // ctxBuffer: file → Array<{line, text}> pending context_before candidates
+    const ctxBuffer = new Map();
+    const trailingNl = /\n$/;
+
+    for (const raw of out.split(/\r?\n/)) {
+      if (!raw) continue;
+      let obj;
+      try { obj = JSON.parse(raw); } catch { continue; }
+
+      if (obj.type === 'match') {
+        const file = obj.data.path?.text || '';
+        const line = obj.data.line_number;
+        const text = (obj.data.lines?.text || '').replace(trailingNl, '').trim();
+
+        // Drain buffered context lines that precede this match line
+        const buf = ctxBuffer.get(file) || [];
+        const before = buf.filter((c) => c.line < line).map((c) => c.text);
+        // Keep anything after this line (could be before a later match in same file)
+        ctxBuffer.set(file, buf.filter((c) => c.line > line));
+
+        matches.push({ file, line, text, context_before: before, context_after: [] });
+        if (matches.length >= maxResults) break;
+
+      } else if (obj.type === 'context') {
+        const file = obj.data.path?.text || '';
+        const ctxLine = obj.data.line_number;
+        const ctxText = (obj.data.lines?.text || '').replace(trailingNl, '');
+
+        // Attach to the most recent match for this file if it's after it
+        const lastMatch = [...matches].reverse().find((m) => m.file === file);
+        if (lastMatch && ctxLine > lastMatch.line) {
+          lastMatch.context_after.push(ctxText);
+        } else {
+          if (!ctxBuffer.has(file)) ctxBuffer.set(file, []);
+          ctxBuffer.get(file).push({ line: ctxLine, text: ctxText });
+        }
+      }
+    }
 
     return matches;
   }
 
-  searchWithFilesystemWalk({ base, regex, wildcardPattern, maxResults, into }) {
+  searchWithFilesystemWalk({ base, regex, wildcardPattern, maxResults, into, contextLines = 0 }) {
     for (const { files } of this.workspace.walkDirectories(base)) {
       for (const filePath of files) {
         if (!this.workspace.isLikelyTextFile(filePath)) continue;
@@ -145,7 +221,12 @@ export class SearchService {
         for (let i = 0; i < lines.length; i += 1) {
           if (!regex.test(lines[i])) continue;
 
-          into.push({ file: filePath, line: i + 1, text: lines[i].trim() });
+          const result = { file: filePath, line: i + 1, text: lines[i].trim() };
+          if (contextLines > 0) {
+            result.context_before = lines.slice(Math.max(0, i - contextLines), i);
+            result.context_after = lines.slice(i + 1, i + 1 + contextLines);
+          }
+          into.push(result);
           if (into.length >= maxResults) return;
         }
       }
@@ -213,7 +294,7 @@ export class SearchService {
       projectPath,
       allRoots,
       glob,
-      maxResults: Math.max(maxResults * 3, maxResults),
+      maxResults: maxResults * 3,
       caseSensitive
     });
 
@@ -222,7 +303,7 @@ export class SearchService {
         query,
         projectPath,
         allRoots,
-        maxResults: Math.max(maxResults * 3, maxResults),
+        maxResults: maxResults * 3,
         minScore: minSemanticScore
       })
       : [];
@@ -243,7 +324,8 @@ export class SearchService {
         lexical_rank: idx + 1,
         lexical_score: 1 / (k + idx + 1),
         semantic_rank: null,
-        semantic_score: 0
+        semantic_score: 0,
+        semantic_score_raw: null
       });
       lexicalLineKey.set(`${item.file}:${item.line}`, key);
     });
@@ -266,6 +348,7 @@ export class SearchService {
         if (!existing.snippet) existing.snippet = item.snippet;
         existing.semantic_rank = idx + 1;
         existing.semantic_score = 1 / (k + idx + 1);
+        existing.semantic_score_raw = item.semantic_score; // P0-3: preserve actual cosine score
         return;
       }
 
@@ -278,7 +361,8 @@ export class SearchService {
         lexical_rank: null,
         lexical_score: 0,
         semantic_rank: idx + 1,
-        semantic_score: 1 / (k + idx + 1)
+        semantic_score: 1 / (k + idx + 1),
+        semantic_score_raw: item.semantic_score // P0-3
       });
     });
 
