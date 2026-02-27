@@ -51,12 +51,8 @@ function main() {
   const targetSkillsDir = path.resolve(process.env.LOCALNEST_SKILLS_DIR || path.join(agentsHome, 'skills'));
   const targetSkillDir = path.join(targetSkillsDir, 'localnest-mcp');
 
-  if (fs.existsSync(targetSkillDir)) {
-    if (!force) {
-      if (!quiet) console.log(`[localnest-skill] already installed: ${targetSkillDir}`);
-      syncKnownToolLocations(sourceSkillDir, quiet, force);
-      return;
-    }
+  const existed = fs.existsSync(targetSkillDir);
+  if (existed) {
     fs.rmSync(targetSkillDir, { recursive: true, force: true });
   }
 
@@ -64,7 +60,7 @@ function main() {
   syncKnownToolLocations(sourceSkillDir, quiet, force);
 
   if (!quiet) {
-    console.log('[localnest-skill] installed successfully');
+    console.log(`[localnest-skill] ${existed ? 'synced' : 'installed'} successfully`);
     console.log(`[localnest-skill] source: ${sourceSkillDir}`);
     console.log(`[localnest-skill] target: ${targetSkillDir}`);
     console.log('[localnest-skill] restart your AI tool to load the updated skill');
@@ -83,11 +79,11 @@ function syncKnownToolLocations(sourceSkillDir, quiet, force) {
     const dest = path.join(toolSkillsDir, 'localnest-mcp');
     try {
       if (fs.existsSync(dest)) {
-        if (!force) continue;
         fs.rmSync(dest, { recursive: true, force: true });
       }
       // Only create if the parent tool directory already exists (tool is installed).
       if (!fs.existsSync(toolSkillsDir)) {
+        if (!force) continue;
         fs.mkdirSync(toolSkillsDir, { recursive: true });
       }
       copyDir(sourceSkillDir, dest);

@@ -58,13 +58,14 @@ npx -y localnest-mcp-doctor
 
 Default retrieval workflow:
 1. `localnest_server_status`
-2. `localnest_list_roots`
-3. `localnest_list_projects`
-4. **`localnest_search_files`** ← start here for module/feature discovery
-5. `localnest_index_status`
-6. `localnest_index_project`
-7. `localnest_search_hybrid` ← for concept/content retrieval
-8. `localnest_read_file`
+2. `localnest_update_status` ← check for urgent fixes/new features first
+3. `localnest_list_roots`
+4. `localnest_list_projects`
+5. **`localnest_search_files`** ← start here for module/feature discovery
+6. `localnest_index_status`
+7. `localnest_index_project`
+8. `localnest_search_hybrid` ← for concept/content retrieval
+9. `localnest_read_file`
 
 Call `localnest_usage_guide` at any time to get embedded best-practice guidance from the server itself.
 
@@ -81,6 +82,19 @@ Answer strategy:
 - Prefer shortest path to evidence.
 - Scope aggressively (`project_path`, `glob`) before broad search.
 - Read narrow ranges first, then widen only when needed.
+- Always include actionable next command if evidence is incomplete (for example: "next run `localnest_search_code` with `use_regex=true`").
+
+### AI quality rules (critical)
+
+- Do not answer from memory when a LocalNest tool can verify it.
+- Cite concrete files/lines after `localnest_read_file` before giving conclusions.
+- If search is empty, show what was searched (`query`, `project_path`, `glob`) and immediately try a fallback strategy (synonyms, regex, broader scope).
+- For bug triage, run both:
+  - `localnest_search_code` for exact error/symbol
+  - `localnest_search_hybrid` for architecture/context
+- If `updates.is_outdated=true`, ask the user:
+  - "LocalNest has a newer version. Do you want to update now?"
+  - If user approves, call `localnest_update_self(approved_by_user=true)`.
 
 ### Finding modules by name (acronyms, domain terms)
 
@@ -107,7 +121,19 @@ Searches file paths and names for a query string. **Use this first when looking 
 Returns structured best-practice guidance for users and AI agents. No params. Call this when unsure about the correct workflow.
 
 ### `localnest_server_status`
-Returns runtime config: active roots, ripgrep status, index backend (`sqlite-vec` or `json`), chunk settings. Always call first in a new session.
+Returns runtime config: active roots, ripgrep status, index backend (`sqlite-vec` or `json`), chunk settings, and update status metadata. Always call first in a new session.
+
+### `localnest_update_status`
+Checks npm for latest package version with local caching (default interval 120 minutes). Params: `force_check` (bool, default false). Use this to decide whether to ask user to update.
+
+### `localnest_update_self`
+Performs global self-update and skill sync. Params:
+- `approved_by_user` (required safety gate; must be true)
+- `dry_run` (bool, default false)
+- `version` (default `latest`)
+- `reinstall_skill` (bool, default true)
+
+This tool should only be called after explicit user approval.
 
 ### `localnest_list_roots`
 Lists configured roots. Supports `limit` / `offset` pagination.
@@ -152,6 +178,7 @@ Lexical + semantic search with RRF ranking. Best for concept-level or natural-la
 - `max_results`
 - `case_sensitive` (bool, default false)
 - `min_semantic_score` (0–1, default 0.05) — raise to filter weak semantic hits
+- `auto_index` (bool, default true) — if semantic index has no hits, LocalNest auto-runs a one-time scoped index bootstrap and retries semantic retrieval
 
 Results include `semantic_score_raw` (actual cosine score) alongside `rrf_score` for filtering by real relevance.
 
