@@ -31,6 +31,8 @@ export class SearchService {
     this.rgTimeoutMs = rgTimeoutMs;
     this.maxFileBytes = maxFileBytes;
     this.vectorIndex = vectorIndex;
+    this.autoIndexedScopes = new Set();
+    this.defaultAutoIndexMaxFiles = 20000;
   }
 
   searchCode({ query, projectPath, allRoots, glob, maxResults, caseSensitive, contextLines = 0, useRegex = false }) {
@@ -287,7 +289,8 @@ export class SearchService {
     glob,
     maxResults,
     caseSensitive,
-    minSemanticScore
+    minSemanticScore,
+    autoIndex = true
   }) {
     const lexical = this.searchCode({
       query,
@@ -298,7 +301,7 @@ export class SearchService {
       caseSensitive
     });
 
-    const semantic = this.vectorIndex
+    let semantic = this.vectorIndex
       ? this.vectorIndex.semanticSearch({
         query,
         projectPath,
@@ -307,6 +310,49 @@ export class SearchService {
         minScore: minSemanticScore
       })
       : [];
+    let autoIndexMeta = null;
+
+    if (this.vectorIndex && autoIndex !== false && semantic.length === 0) {
+      const scopeKey = this.buildScopeKey(projectPath, allRoots);
+      if (!this.autoIndexedScopes.has(scopeKey)) {
+        this.autoIndexedScopes.add(scopeKey);
+        try {
+          const indexResult = this.vectorIndex.indexProject({
+            projectPath,
+            allRoots,
+            force: false,
+            maxFiles: this.defaultAutoIndexMaxFiles
+          });
+          semantic = this.vectorIndex.semanticSearch({
+            query,
+            projectPath,
+            allRoots,
+            maxResults: maxResults * 3,
+            minScore: minSemanticScore
+          });
+          autoIndexMeta = {
+            attempted: true,
+            scope: scopeKey,
+            success: true,
+            indexed_files: indexResult?.indexed_files ?? null,
+            failed_files: Array.isArray(indexResult?.failed_files) ? indexResult.failed_files.length : null
+          };
+        } catch (error) {
+          autoIndexMeta = {
+            attempted: true,
+            scope: scopeKey,
+            success: false,
+            error: String(error?.message || error)
+          };
+        }
+      } else {
+        autoIndexMeta = {
+          attempted: false,
+          scope: scopeKey,
+          skipped_reason: 'already_attempted_for_scope'
+        };
+      }
+    }
 
     const k = 60;
     const scored = new Map();
@@ -378,7 +424,14 @@ export class SearchService {
       query,
       lexical_hits: lexical.length,
       semantic_hits: semantic.length,
+      auto_index: autoIndexMeta,
       results: fused
     };
+  }
+
+  buildScopeKey(projectPath, allRoots) {
+    const bases = this.workspace.resolveSearchBases(projectPath, allRoots);
+    const normalized = bases.map((base) => this.workspace.normalizeTarget(base)).sort();
+    return normalized.join('||');
   }
 }

@@ -14,6 +14,11 @@ function parseIntEnv(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseIntEnvClamped(value, fallback, min, max) {
+  const parsed = parseIntEnv(value, fallback);
+  return Math.max(min, Math.min(max, parsed));
+}
+
 function parseStringEnv(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
   return String(value).trim();
@@ -227,6 +232,7 @@ export function buildRuntimeConfig(env = process.env) {
   }
   const fileSettings = parseConfigFileSettings(configPath);
   return {
+    localnestHome,
     mcpMode: (env.MCP_MODE || 'stdio').toLowerCase(),
     disableConsoleOutput: parseBoolean(env.DISABLE_CONSOLE_OUTPUT, false),
     rgTimeoutMs: parseIntEnv(env.LOCALNEST_RG_TIMEOUT_MS, 15000),
@@ -259,6 +265,19 @@ export function buildRuntimeConfig(env = process.env) {
     vectorMaxIndexedFiles: parseIntEnv(
       env.LOCALNEST_VECTOR_MAX_FILES,
       fileSettings.maxIndexedFiles || DEFAULT_MAX_INDEX_FILES
+    ),
+    updatePackageName: parseStringEnv(env.LOCALNEST_UPDATE_PACKAGE, 'localnest-mcp'),
+    updateCheckIntervalMinutes: parseIntEnvClamped(
+      env.LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES,
+      120,
+      15,
+      1440
+    ),
+    updateFailureBackoffMinutes: parseIntEnvClamped(
+      env.LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES,
+      15,
+      5,
+      240
     ),
     extraProjectMarkers: new Set(
       (env.LOCALNEST_EXTRA_PROJECT_MARKERS || '')

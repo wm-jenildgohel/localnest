@@ -1,5 +1,12 @@
 # LocalNest MCP
 
+[![npm version](https://img.shields.io/npm/v/localnest-mcp)](https://www.npmjs.com/package/localnest-mcp)
+[![Node.js](https://img.shields.io/node/v/localnest-mcp)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Quality](https://github.com/wm-jenildgohel/localnest/actions/workflows/quality.yml/badge.svg?branch=beta)](https://github.com/wm-jenildgohel/localnest/actions/workflows/quality.yml)
+[![OpenSSF Scorecard](https://github.com/wm-jenildgohel/localnest/actions/workflows/scorecards.yml/badge.svg?branch=beta)](https://scorecard.dev/viewer/?uri=github.com/wm-jenildgohel/localnest)
+[![CodeQL](https://github.com/wm-jenildgohel/localnest/actions/workflows/codeql.yml/badge.svg?branch=beta)](https://github.com/wm-jenildgohel/localnest/actions/workflows/codeql.yml)
+
 A local-first MCP server that gives AI agents safe, read-only access to your codebase — with optional semantic indexing for high-quality retrieval.
 
 ## What It Does
@@ -84,6 +91,8 @@ startup_timeout_sec = 30
 |---|---|
 | `localnest_usage_guide` | Best-practice guidance for agents — call this first when unsure |
 | `localnest_server_status` | Runtime config, roots, ripgrep status, index backend |
+| `localnest_update_status` | Check npm for latest LocalNest version (cached interval) |
+| `localnest_update_self` | Update LocalNest globally and sync bundled skill (approval required) |
 | `localnest_list_roots` | List configured roots |
 | `localnest_list_projects` | List projects under a root |
 | `localnest_project_tree` | File/folder tree for a project |
@@ -102,7 +111,7 @@ Only canonical `localnest_*` tool names are exposed (no short aliases) to keep M
 
 **Recommended agent workflow:**
 ```
-localnest_server_status → localnest_list_roots → localnest_list_projects
+localnest_server_status → localnest_update_status → localnest_list_roots → localnest_list_projects
 → localnest_index_status → localnest_index_project
 → localnest_search_hybrid → localnest_read_file
 ```
@@ -139,6 +148,9 @@ Setup writes two files:
 | `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | Overlap between chunks |
 | `LOCALNEST_VECTOR_MAX_TERMS` | `80` | Max terms per chunk |
 | `LOCALNEST_VECTOR_MAX_FILES` | `20000` | Max files per index run |
+| `LOCALNEST_UPDATE_PACKAGE` | `localnest-mcp` | npm package name to check/update |
+| `LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES` | `120` | Refresh interval for npm update checks |
+| `LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES` | `15` | Retry interval when npm check fails |
 
 ## Auto-Migration
 
@@ -163,4 +175,14 @@ npx skills add https://github.com/wm-jenildgohel/localnest --skill localnest-mcp
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## Trust And Security Testing
+
+LocalNest follows the common OSS security pipeline pattern used across GitHub repos.
+
+- CI quality gate: [quality.yml](./.github/workflows/quality.yml)
+- OpenSSF Scorecard scan + SARIF upload: [scorecards.yml](./.github/workflows/scorecards.yml)
+- CodeQL static analysis: [codeql.yml](./.github/workflows/codeql.yml)
+- Dependency and GitHub Actions update automation: [.github/dependabot.yml](./.github/dependabot.yml)
+- Public Scorecard report (when indexed/public): https://scorecard.dev/viewer/?uri=github.com/wm-jenildgohel/localnest
   

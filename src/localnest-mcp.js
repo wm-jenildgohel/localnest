@@ -19,6 +19,7 @@ import {
 import { WorkspaceService } from './services/workspace-service.js';
 import { SearchService } from './services/search-service.js';
 import { VectorIndexService } from './services/vector-index-service.js';
+import { UpdateService } from './services/update-service.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -83,6 +84,13 @@ const search = new SearchService({
   rgTimeoutMs: runtime.rgTimeoutMs,
   maxFileBytes: DEFAULT_MAX_FILE_BYTES,
   vectorIndex
+});
+const updates = new UpdateService({
+  localnestHome: runtime.localnestHome,
+  packageName: runtime.updatePackageName,
+  currentVersion: SERVER_VERSION,
+  checkIntervalMinutes: runtime.updateCheckIntervalMinutes,
+  failureBackoffMinutes: runtime.updateFailureBackoffMinutes
 });
 
 const server = new McpServer({
@@ -222,7 +230,8 @@ registerJsonTool(
       chunk_overlap: runtime.vectorChunkOverlap,
       max_terms_per_chunk: runtime.vectorMaxTermsPerChunk,
       max_indexed_files: runtime.vectorMaxIndexedFiles
-    }
+    },
+    updates: await updates.getStatus({ force: false })
   })
 );
 
@@ -245,28 +254,83 @@ registerJsonTool(
       'Use localnest_list_projects to discover projects under a root.',
       'Run localnest_index_project for your active project/root before semantic search.',
       'Use localnest_search_hybrid for low-noise retrieval.',
-      'Use localnest_read_file for targeted context windows.'
+      'Use localnest_read_file for targeted context windows.',
+      'Run localnest_update_status every session and update when a newer stable version is available.'
     ],
     for_ai_agents: [
       'Call localnest_server_status first to understand runtime capabilities.',
       'Call localnest_index_status, then localnest_index_project when index is empty/stale.',
       'To find a module or feature by name (e.g. "SSO", "payments"), use localnest_search_files FIRST — it searches file paths and names, which is faster and more reliable than content search for module discovery.',
       'For acronyms or domain terms (SSO, IAM, CRM), also try synonyms: SSO → oauth, saml, passport, auth. Use localnest_search_files with each variant.',
-      'Prefer localnest_search_hybrid with project_path for concept-level content retrieval.',
+      'Prefer localnest_search_hybrid with project_path for concept-level content retrieval. It auto-indexes once per scope when semantic index is empty (auto_index=true).',
       'Use localnest_search_code for exact symbol/keyword/regex matches in file contents.',
       'Use all_roots only when cross-project lookup is required.',
-      'After retrieval, call localnest_read_file with narrow line ranges.'
+      'After retrieval, call localnest_read_file with narrow line ranges.',
+      'If updates.is_outdated=true in server status, ask user for approval and then call localnest_update_self with approved_by_user=true.'
+    ],
+    quality_playbook: [
+      'Never answer from memory when a LocalNest tool can verify the claim.',
+      'For bug/debug tasks: run both localnest_search_code (exact) and localnest_search_hybrid (context).',
+      'If results are empty, retry with synonyms and then use localnest_search_code with use_regex=true.',
+      'Always cite concrete file paths and line ranges after localnest_read_file before conclusions.'
     ],
     tool_sequence: [
       'localnest_server_status',
+      'localnest_update_status',
       'localnest_list_roots',
       'localnest_list_projects',
       'localnest_search_files → for module/feature discovery by name',
       'localnest_index_status',
       'localnest_index_project',
       'localnest_search_hybrid → for concept/content retrieval',
-      'localnest_read_file'
+      'localnest_read_file',
+      'localnest_update_status',
+      'localnest_update_self (only after user approval)'
     ]
+  })
+);
+
+registerJsonTool(
+  ['localnest_update_status'],
+  {
+    title: 'Update Status',
+    description: 'Check npm for the latest localnest-mcp version (cached, default every 120 minutes).',
+    inputSchema: {
+      force_check: z.boolean().default(false)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  async ({ force_check }) => updates.getStatus({ force: force_check })
+);
+
+registerJsonTool(
+  ['localnest_update_self'],
+  {
+    title: 'Update Self',
+    description: 'Update localnest-mcp globally via npm and sync bundled skill. Requires explicit user approval.',
+    inputSchema: {
+      approved_by_user: z.boolean().default(false),
+      dry_run: z.boolean().default(false),
+      version: z.string().default('latest'),
+      reinstall_skill: z.boolean().default(true)
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  async ({ approved_by_user, dry_run, version, reinstall_skill }) => updates.selfUpdate({
+    approvedByUser: approved_by_user,
+    dryRun: dry_run,
+    version,
+    reinstallSkill: reinstall_skill
   })
 );
 
@@ -457,16 +521,17 @@ registerJsonTool(
       glob: z.string().default('*'),
       max_results: z.number().int().min(1).max(1000).default(DEFAULT_MAX_RESULTS),
       case_sensitive: z.boolean().default(false),
-      min_semantic_score: z.number().min(0).max(1).default(0.05)
+      min_semantic_score: z.number().min(0).max(1).default(0.05),
+      auto_index: z.boolean().default(true)
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false
     }
   },
-  async ({ query, project_path, all_roots, glob, max_results, case_sensitive, min_semantic_score }) =>
+  async ({ query, project_path, all_roots, glob, max_results, case_sensitive, min_semantic_score, auto_index }) =>
     search.searchHybrid({
       query,
       projectPath: project_path,
@@ -474,7 +539,8 @@ registerJsonTool(
       glob,
       maxResults: max_results,
       caseSensitive: case_sensitive,
-      minSemanticScore: min_semantic_score
+      minSemanticScore: min_semantic_score,
+      autoIndex: auto_index
     })
 );
 
@@ -530,6 +596,10 @@ async function main() {
       `will use slower JS fallback. ${buildRipgrepHelpMessage()}\n`
     );
   }
+
+  updates.warmCheck().catch((error) => {
+    process.stderr.write(`[localnest-update] warm check failed: ${error?.message || error}\n`);
+  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

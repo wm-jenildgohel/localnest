@@ -80,6 +80,27 @@ test('buildRuntimeConfig uses config file roots when PROJECT_ROOTS missing', () 
   fs.rmSync(localnestHome, { recursive: true, force: true });
 });
 
+test('buildRuntimeConfig clamps update intervals to safe ranges', () => {
+  const localnestHome = makeTempDir();
+  const runtimeLow = buildRuntimeConfig({
+    LOCALNEST_HOME: localnestHome,
+    LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES: '1',
+    LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES: '1'
+  });
+  assert.equal(runtimeLow.updateCheckIntervalMinutes, 15);
+  assert.equal(runtimeLow.updateFailureBackoffMinutes, 5);
+
+  const runtimeHigh = buildRuntimeConfig({
+    LOCALNEST_HOME: localnestHome,
+    LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES: '99999',
+    LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES: '99999'
+  });
+  assert.equal(runtimeHigh.updateCheckIntervalMinutes, 1440);
+  assert.equal(runtimeHigh.updateFailureBackoffMinutes, 240);
+
+  fs.rmSync(localnestHome, { recursive: true, force: true });
+});
+
 test('applyConsolePolicy disables common console outputs', () => {
   const original = {
     log: console.log,

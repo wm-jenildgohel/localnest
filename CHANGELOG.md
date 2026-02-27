@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Automatic npm update checks with local cache/backoff via new `UpdateService`.
+- New MCP tools:
+  - `localnest_update_status` (cached npm version check with optional force refresh)
+  - `localnest_update_self` (approved self-update + bundled skill sync, with dry-run support)
+- New runtime env settings:
+  - `LOCALNEST_UPDATE_PACKAGE`
+  - `LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES`
+  - `LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES`
+- OpenSSF Scorecard GitHub Actions workflow (`.github/workflows/scorecards.yml`) with SARIF upload to code scanning.
+- GitHub CodeQL workflow (`.github/workflows/codeql.yml`) for static security analysis.
+- Dependabot configuration (`.github/dependabot.yml`) for npm and GitHub Actions dependency updates.
+- Additional automated tests for:
+  - update interval clamping in runtime config
+  - self-update dry-run behavior
+  - install failure and skill-sync failure branches
+
+### Changed
+- `localnest_server_status` now includes structured `updates` metadata so agents can prompt users proactively when a newer version is available.
+- `localnest_usage_guide` and bundled `SKILL.md` expanded with explicit update flow and stronger evidence-first retrieval guidance.
+
 ## [0.0.3] - 2026-02-27
 
 ### Changed
