@@ -5,3 +5,20 @@ node_modules/
 .mcp.localnest.*.json
 localnest.config.json
 docs/
+
+# Secrets and credentials (OSPS-BR-07.01)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.cert
+*.crt
+*.secret
+*_secret
+*_token
+*_password
+*.credentials
+.npmrc-private
