@@ -88,7 +88,7 @@ function checkRipgrep() {
     return { id: 'ripgrep', ok: true, detail: 'ripgrep available' };
   }
 
-  let fix = 'Install ripgrep (rg) and re-run doctor.';
+  let fix;
   if (process.platform === 'win32') {
     fix = 'Install ripgrep: winget install BurntSushi.ripgrep.MSVC';
   } else if (process.platform === 'darwin') {

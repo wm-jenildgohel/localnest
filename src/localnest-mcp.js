@@ -146,7 +146,7 @@ function paginateItems(items, limit, offset) {
 }
 
 function buildRipgrepHelpMessage() {
-  let install = 'Install ripgrep (rg), then restart localnest-mcp.';
+  let install;
   if (process.platform === 'win32') {
     install = 'Install ripgrep: winget install BurntSushi.ripgrep.MSVC';
   } else if (process.platform === 'darwin') {
