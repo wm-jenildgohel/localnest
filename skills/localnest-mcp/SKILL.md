@@ -68,6 +68,20 @@ Default retrieval workflow:
 
 Call `localnest_usage_guide` at any time to get embedded best-practice guidance from the server itself.
 
+### Adaptive AI behavior (important)
+
+Do not run the full sequence blindly on every request. Adapt by intent:
+- If user asks for an exact symbol/import/error string: start with `localnest_search_code`.
+- If user asks "where is X module/feature": start with `localnest_search_files`.
+- If user asks concept/"how it works": run `localnest_search_hybrid` (after index check).
+- If user already gave a file path + line concern: go directly to `localnest_read_file`.
+- If index is stale/empty: run `localnest_index_project` only for the needed `project_path`.
+
+Answer strategy:
+- Prefer shortest path to evidence.
+- Scope aggressively (`project_path`, `glob`) before broad search.
+- Read narrow ranges first, then widen only when needed.
+
 ### Finding modules by name (acronyms, domain terms)
 
 When looking for a module like "SSO", "payments", "IAM":
@@ -152,7 +166,8 @@ High-level summary: language breakdown, extension stats, file counts. Params: `p
 - All tools accept `response_format: "json"` (default, for processing) or `"markdown"` (for readable output).
 - For list tools, pass `limit` + `offset`; continue while `has_more` is true using `next_offset`.
 - Prefer `project_path` for focused retrieval. Use `all_roots=true` only for cross-project queries.
-- Tools also respond to short aliases: `server_status`, `list_roots`, `list_projects`, `project_tree`, `index_status`, `index_project`, `search_files`, `search_code`, `search_hybrid`, `read_file`, `summarize_project`, `usage_guide`.
+- Canonical names are `localnest_*`.
+- Short aliases are intentionally not exposed to keep tool lists clean and avoid duplicates in MCP clients.
 
 ## Evidence-First Pattern
 
@@ -211,3 +226,7 @@ Use `**/*.ts` not `*.ts`. The glob is matched against the relative file path fro
 LocalNest auto-falls back to JSON backend. Confirm active backend via:
 - `localnest_server_status` → `vector_index.backend` (actual) vs `vector_index.requested_backend` (configured)
 - `localnest_index_status`
+
+### Duplicate-looking tools in MCP clients
+
+Stable releases expose canonical `localnest_*` tools only.

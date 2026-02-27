@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.3] - 2026-02-27
+
+### Changed
+- Promoted `0.0.2-beta.3` to the first stable release line as `0.0.3`.
+- Updated package/runtime version references for stable (`package.json`, `package-lock.json`, `src/config.js`).
+- Canonical tool names only: stable release exposes `localnest_*` tools without short aliases to avoid duplicate tool lists in MCP clients.
+
 ## [0.0.2-beta.3] - 2026-02-26
 
 ### Added

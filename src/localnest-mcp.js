@@ -156,7 +156,9 @@ function buildRipgrepHelpMessage() {
 }
 
 function registerJsonTool(names, { title, description, inputSchema, annotations, markdownTitle }, handler) {
-  const toolNames = Array.isArray(names) ? names : [names];
+  const allNames = Array.isArray(names) ? names : [names];
+  const canonical = allNames[0];
+  const toolNames = [canonical];
   const schema = {
     ...inputSchema,
     response_format: RESPONSE_FORMAT_SCHEMA
