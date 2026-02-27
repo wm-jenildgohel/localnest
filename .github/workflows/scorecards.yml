@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - beta
   schedule:
     - cron: '30 2 * * 6'
 
