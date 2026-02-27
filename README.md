@@ -15,7 +15,7 @@ All data stays on your machine. No external indexing service required.
 ## Requirements
 
 - Node.js `>=18`
-- `ripgrep` (`rg`)
+- `ripgrep` (`rg`) recommended for fastest lexical search (server still starts without it)
 
 Install ripgrep:
 
@@ -54,6 +54,7 @@ After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client
     "localnest": {
       "command": "npx",
       "args": ["-y", "localnest-mcp"],
+      "startup_timeout_sec": 30,
       "env": {
         "MCP_MODE": "stdio",
         "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
@@ -70,6 +71,13 @@ After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client
 
 Restart your MCP client after updating the config.
 
+If your client reports MCP startup timeout (for example 10s default), increase it:
+
+```toml
+[mcp_servers.localnest]
+startup_timeout_sec = 30
+```
+
 ## Tools
 
 | Tool | Purpose |
@@ -81,14 +89,14 @@ Restart your MCP client after updating the config.
 | `localnest_project_tree` | File/folder tree for a project |
 | `localnest_index_status` | Semantic index metadata (exists, stale, backend) |
 | `localnest_index_project` | Build or refresh semantic index |
+| `localnest_search_files` | File/path name search (best first step for module/feature discovery) |
 | `localnest_search_code` | Lexical search (exact symbols, regex, identifiers) |
 | `localnest_search_hybrid` | Hybrid search (lexical + semantic, RRF-ranked) |
 | `localnest_read_file` | Read a bounded line window from a file |
 | `localnest_summarize_project` | Language/extension breakdown for a project |
 
 All tools support `response_format: "json"` (default) or `"markdown"`.
-
-Short aliases without the `localnest_` prefix are also supported (e.g. `server_status`, `search_hybrid`).
+Only canonical `localnest_*` tool names are exposed (no short aliases) to keep MCP clients clean and non-duplicative.
 
 **List tools** return pagination fields: `total_count`, `count`, `limit`, `offset`, `has_more`, `next_offset`, `items`.
 

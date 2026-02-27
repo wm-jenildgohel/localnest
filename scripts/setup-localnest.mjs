@@ -102,6 +102,7 @@ function buildClientSnippet(packageRef, indexConfig) {
       localnest: {
         command: getNpxCommand(),
         args: ['-y', packageRef],
+        startup_timeout_sec: 30,
         env: {
           MCP_MODE: 'stdio',
           LOCALNEST_CONFIG: configPath,
@@ -119,6 +120,7 @@ function buildGlobalClientSnippet(indexConfig) {
     mcpServers: {
       localnest: {
         command: getGlobalCommand(),
+        startup_timeout_sec: 30,
         env: {
           MCP_MODE: 'stdio',
           LOCALNEST_CONFIG: configPath,
@@ -234,8 +236,8 @@ async function main() {
     console.log('');
     console.log('Usage:');
     console.log('  npm run setup');
-    console.log('  npm run setup -- --paths=\"/abs/path1,/abs/path2\"');
-    console.log('  npm run setup -- --package=\"localnest-mcp\"');
+    console.log('  npm run setup -- --paths="/abs/path1,/abs/path2"');
+    console.log('  npm run setup -- --package="localnest-mcp"');
     return;
   }
 

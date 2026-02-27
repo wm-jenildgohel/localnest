@@ -1,6 +1,6 @@
 {
   "name": "localnest-mcp",
-  "version": "0.0.2-beta.2",
+  "version": "0.0.3",
   "license": "MIT",
   "author": "LocalNest",
   "repository": {
@@ -24,10 +24,10 @@
   "type": "module",
   "description": "LocalNest read-only MCP server for exposing project context from local machine",
   "bin": {
-    "localnest-mcp": "./bin/localnest-mcp.js",
-    "localnest-mcp-setup": "./bin/localnest-mcp-setup.js",
-    "localnest-mcp-doctor": "./bin/localnest-mcp-doctor.js",
-    "localnest-mcp-install-skill": "./bin/localnest-mcp-install-skill.js"
+    "localnest-mcp": "bin/localnest-mcp.js",
+    "localnest-mcp-setup": "bin/localnest-mcp-setup.js",
+    "localnest-mcp-doctor": "bin/localnest-mcp-doctor.js",
+    "localnest-mcp-install-skill": "bin/localnest-mcp-install-skill.js"
   },
   "files": [
     "bin",
@@ -47,8 +47,15 @@
     "install:skill": "node scripts/install-localnest-skill.mjs",
     "start": "node src/localnest-mcp.js",
     "test": "node --test",
-    "check": "node --check src/localnest-mcp.js && node --check src/config.js && node --check src/migrations/config-migrator.js && node --check src/services/workspace-service.js && node --check src/services/search-service.js && node --check src/services/vector-index-service.js && node --check src/services/sqlite-vec-index-service.js && node --check scripts/setup-localnest.mjs && node --check scripts/doctor-localnest.mjs && node --check scripts/install-localnest-skill.mjs && node --check bin/localnest-mcp.js && node --check bin/localnest-mcp-setup.js && node --check bin/localnest-mcp-doctor.js && node --check bin/localnest-mcp-install-skill.js",
-    "prepublishOnly": "npm run check",       
+    "test:coverage": "node --test --experimental-test-coverage",
+    "lint": "eslint . --max-warnings=0",
+    "quality:cycles": "madge --circular --extensions js,mjs src",
+    "quality:deps": "depcheck --json --ignores=publint",
+    "quality:package": "node scripts/quality-package.mjs",
+    "quality:audit": "node scripts/quality-audit.mjs",
+    "quality": "npm run check && npm run lint && npm run test:coverage && npm run quality:cycles && npm run quality:deps && npm run quality:package && npm run quality:audit",
+    "check": "node --check src/localnest-mcp.js && node --check src/config.js && node --check src/migrations/config-migrator.js && node --check src/services/workspace-service.js && node --check src/services/tokenizer.js && node --check src/services/search-service.js && node --check src/services/vector-index-service.js && node --check src/services/sqlite-vec-index-service.js && node --check scripts/setup-localnest.mjs && node --check scripts/doctor-localnest.mjs && node --check scripts/install-localnest-skill.mjs && node --check scripts/quality-audit.mjs && node --check scripts/quality-package.mjs && node --check bin/localnest-mcp.js && node --check bin/localnest-mcp-setup.js && node --check bin/localnest-mcp-doctor.js && node --check bin/localnest-mcp-install-skill.js",
+    "prepublishOnly": "npm run check",
     "release:beta": "npm publish --tag beta",
     "release:latest": "npm publish",
     "bump:beta": "npm version prerelease --preid=beta --no-git-tag-version"
@@ -56,5 +63,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.4",
     "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "depcheck": "^1.4.7",
+    "eslint": "^9.21.0",
+    "globals": "^15.15.0",
+    "madge": "^8.0.0",
+    "publint": "^0.3.7"
   }
 }
