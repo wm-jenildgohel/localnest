@@ -113,57 +113,6 @@ class NodeSqliteAdapter {
   }
 }
 
-class Sqlite3Adapter {
-  constructor(db) {
-    this.db = db;
-  }
-
-  async exec(sql) {
-    await new Promise((resolve, reject) => {
-      this.db.exec(sql, (error) => (error ? reject(error) : resolve()));
-    });
-  }
-
-  async run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function onRun(error) {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve({
-          changes: this?.changes ?? 0,
-          lastInsertRowid: this?.lastID ?? null
-        });
-      });
-    });
-  }
-
-  async get(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (error, row) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(row || null);
-      });
-    });
-  }
-
-  async all(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (error, rows) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(rows || []);
-      });
-    });
-  }
-}
-
 export class MemoryStore {
   constructor({
     enabled,
@@ -225,26 +174,6 @@ export class MemoryStore {
         return { name: 'node-sqlite', adapter: new NodeSqliteAdapter(db) };
       } catch {
         if (this.requestedBackend === 'node-sqlite') return null;
-      }
-    }
-
-    if (this.requestedBackend === 'sqlite3' || this.requestedBackend === 'auto') {
-      try {
-        const sqlite3 = await import('sqlite3');
-        const Sqlite3Ctor = sqlite3?.Database || sqlite3?.default?.Database;
-        if (!Sqlite3Ctor) return null;
-        const db = await new Promise((resolve, reject) => {
-          const handle = new Sqlite3Ctor(this.dbPath, (error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve(handle);
-          });
-        });
-        return { name: 'sqlite3', adapter: new Sqlite3Adapter(db) };
-      } catch {
-        return null;
       }
     }
 

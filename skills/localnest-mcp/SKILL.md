@@ -319,7 +319,6 @@ Check:
 Common causes:
 - User did not opt in during `localnest-mcp-setup`
 - Memory backend unavailable on the current runtime
-- `sqlite3` dependency not installed for Node 18/20 fallback
 
 If disabled, continue using retrieval tools normally and ask the user to rerun setup if they want memory enabled.
 

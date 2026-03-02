@@ -44,8 +44,9 @@ export class MemoryService {
     if (requested === 'sqlite3') {
       return {
         requested,
-        selected: await this._supportsSqlite3Package() ? 'sqlite3' : null,
-        available: await this._supportsSqlite3Package()
+        selected: null,
+        available: false,
+        reason: 'sqlite3 fallback is disabled in published builds due to upstream audit vulnerabilities'
       };
     }
 
@@ -59,21 +60,11 @@ export class MemoryService {
       };
     }
 
-    const supportsSqlite3 = await this._supportsSqlite3Package();
-    if (supportsSqlite3) {
-      return {
-        requested,
-        selected: 'sqlite3',
-        available: true,
-        reason: 'sqlite3 package available'
-      };
-    }
-
     return {
       requested,
       selected: null,
       available: false,
-      reason: 'No supported SQLite backend detected. Install sqlite3 or use Node 22.13+.'
+      reason: 'No supported SQLite backend detected. Use Node 22.13+ for local memory support.'
     };
   }
 
@@ -161,15 +152,6 @@ export class MemoryService {
     try {
       const mod = await import('node:sqlite');
       return Boolean(mod?.DatabaseSync);
-    } catch {
-      return false;
-    }
-  }
-
-  async _supportsSqlite3Package() {
-    try {
-      const mod = await import('sqlite3');
-      return Boolean(mod?.Database || mod?.default?.Database);
     } catch {
       return false;
     }

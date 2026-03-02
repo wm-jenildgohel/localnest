@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 - Local memory subsystem:
   - SQLite-backed canonical memory store with revisions, scoped metadata, recall counters, and dedupe fingerprinting
   - background capture event log with promotion/ignore decisions
-  - Node 22+ `node:sqlite` support with `sqlite3` fallback for Node 18/20
+  - Node 22+ `node:sqlite` support for production memory storage
 - New runtime env settings:
   - `LOCALNEST_MEMORY_ENABLED`
   - `LOCALNEST_MEMORY_BACKEND`

@@ -71,7 +71,7 @@ test('buildRuntimeConfig uses config file roots when PROJECT_ROOTS missing', () 
       roots: [{ label: 'cfg-root', path: rootA }],
       memory: {
         enabled: true,
-        backend: 'sqlite3',
+        backend: 'auto',
         dbPath: path.join(localnestHome, 'memory.db'),
         autoCapture: true,
         askForConsentDone: true
@@ -88,7 +88,7 @@ test('buildRuntimeConfig uses config file roots when PROJECT_ROOTS missing', () 
   assert.equal(runtime.roots[0].label, 'cfg-root');
   assert.equal(runtime.roots[0].path, rootA);
   assert.equal(runtime.memoryEnabled, true);
-  assert.equal(runtime.memoryBackend, 'sqlite3');
+  assert.equal(runtime.memoryBackend, 'auto');
   assert.equal(runtime.memoryAutoCapture, true);
   assert.equal(runtime.memoryConsentDone, true);
 

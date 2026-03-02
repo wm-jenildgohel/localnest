@@ -175,8 +175,8 @@ Setup writes two files:
 
 Memory is opt-in during `localnest-mcp-setup`. When enabled, LocalNest stores durable project knowledge and preferences in a local SQLite database.
 
-- Node 22+ can use built-in `node:sqlite`
-- Node 18/20 can use the bundled `sqlite3` dependency
+- Memory currently requires Node 22.13+ for built-in `node:sqlite`
+- Node 18/20 continue to support the rest of LocalNest, but memory stays unavailable on those runtimes
 - If memory backend initialization fails, existing code search and read tools still work
 
 For agents, the intended flow is:

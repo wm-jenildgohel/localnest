@@ -62,7 +62,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.4",
-    "sqlite3": "^5.1.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {

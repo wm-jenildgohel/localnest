@@ -14,15 +14,9 @@ async function hasSupportedBackend() {
     const mod = await import('node:sqlite');
     if (mod?.DatabaseSync) return true;
   } catch {
-    // Ignore and fall through to sqlite3 check.
+    // Ignore and treat memory store as unavailable on this runtime.
   }
-
-  try {
-    const mod = await import('sqlite3');
-    return Boolean(mod?.Database || mod?.default?.Database);
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 test('memory store lifecycle: create, list, update, recall, delete', async (t) => {
