@@ -428,8 +428,11 @@ registerJsonTool(
     description: 'Recall the most relevant local memories for a task or query.',
     inputSchema: {
       query: z.string().min(1),
+      root_path: z.string().optional(),
       project_path: z.string().optional(),
+      branch_name: z.string().optional(),
       topic: z.string().optional(),
+      feature: z.string().optional(),
       kind: MEMORY_KIND_SCHEMA.optional(),
       limit: z.number().int().min(1).max(50).default(10)
     },
@@ -440,10 +443,13 @@ registerJsonTool(
       openWorldHint: false
     }
   },
-  async ({ query, project_path, topic, kind, limit }) => memory.recall({
+  async ({ query, root_path, project_path, branch_name, topic, feature, kind, limit }) => memory.recall({
     query,
+    rootPath: root_path,
     projectPath: project_path,
+    branchName: branch_name,
     topic,
+    feature,
     kind,
     limit
   })

@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { tokenize } from './tokenizer.js';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function nowIso() {
   return new Date().toISOString();
@@ -76,12 +77,60 @@ function generateMemoryId() {
 }
 
 function splitTerms(query) {
-  return String(query || '')
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/i)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  return tokenize(String(query || '')).slice(0, 20);
+}
+
+function buildSearchTerms({ title, summary, content, scope, tags, links, sourceRef }) {
+  return Array.from(new Set(tokenize([
+    title,
+    summary,
+    content,
+    scope.root_path,
+    scope.project_path,
+    scope.branch_name,
+    scope.topic,
+    scope.feature,
+    ensureArray(tags).join(' '),
+    normalizeLinks(links).map((item) => `${item.label || ''} ${item.path}`).join(' '),
+    sourceRef
+  ].join('\n')))).slice(0, 200);
+}
+
+function scoreTokenOverlap(queryTerms, candidateTerms) {
+  if (queryTerms.length === 0 || candidateTerms.length === 0) return 0;
+  const candidateSet = new Set(candidateTerms);
+  let hits = 0;
+  for (const term of queryTerms) {
+    if (candidateSet.has(term)) hits += 1;
+  }
+  return hits / Math.max(1, queryTerms.length);
+}
+
+function textContainsAllTerms(text, terms) {
+  const haystack = String(text || '').toLowerCase();
+  return terms.length > 0 && terms.every((term) => haystack.includes(term));
+}
+
+function scoreScopeMatch(row, scope = {}) {
+  let score = 0;
+  if (scope.project_path && row.scope_project_path === scope.project_path) score += 3;
+  if (scope.topic && row.topic === scope.topic) score += 2;
+  if (scope.feature && row.feature === scope.feature) score += 1.5;
+  if (scope.branch_name && row.scope_branch_name === scope.branch_name) score += 1;
+  if (scope.root_path && row.scope_root_path === scope.root_path) score += 1;
+  return score;
+}
+
+function computeMemorySimilarity(a, b) {
+  const aTerms = new Set(buildSearchTerms(a));
+  const bTerms = new Set(buildSearchTerms(b));
+  if (aTerms.size === 0 || bTerms.size === 0) return 0;
+
+  let intersection = 0;
+  for (const term of aTerms) {
+    if (bTerms.has(term)) intersection += 1;
+  }
+  return intersection / Math.max(aTerms.size, bTerms.size);
 }
 
 class NodeSqliteAdapter {
@@ -202,6 +251,7 @@ export class MemoryStore {
         topic TEXT NOT NULL DEFAULT '',
         feature TEXT NOT NULL DEFAULT '',
         tags_json TEXT NOT NULL DEFAULT '[]',
+        search_terms_json TEXT NOT NULL DEFAULT '[]',
         links_json TEXT NOT NULL DEFAULT '[]',
         source_type TEXT NOT NULL DEFAULT 'manual',
         source_ref TEXT NOT NULL DEFAULT '',
@@ -255,6 +305,48 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_memory_events_created_at ON memory_events(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_memory_events_project ON memory_events(scope_project_path);
     `);
+
+    await this.runMigrations();
+  }
+
+  async runMigrations() {
+    const currentVersion = Number.parseInt(await this.getMeta('schema_version') || '0', 10) || 0;
+
+    if (currentVersion < 2) {
+      try {
+        await this.adapter.exec(`ALTER TABLE memory_entries ADD COLUMN search_terms_json TEXT NOT NULL DEFAULT '[]'`);
+      } catch {
+        // Column may already exist on a fresh schema or partially migrated db.
+      }
+
+      const rows = await this.adapter.all(
+        `SELECT id, title, summary, content, scope_root_path, scope_project_path, scope_branch_name,
+                topic, feature, tags_json, links_json, source_ref
+           FROM memory_entries`
+      );
+
+      for (const row of rows) {
+        const searchTerms = buildSearchTerms({
+          title: row.title,
+          summary: row.summary,
+          content: row.content,
+          scope: {
+            root_path: row.scope_root_path,
+            project_path: row.scope_project_path,
+            branch_name: row.scope_branch_name,
+            topic: row.topic,
+            feature: row.feature
+          },
+          tags: JSON.parse(row.tags_json || '[]'),
+          links: JSON.parse(row.links_json || '[]'),
+          sourceRef: row.source_ref
+        });
+        await this.adapter.run(
+          'UPDATE memory_entries SET search_terms_json = ? WHERE id = ?',
+          [stableJson(searchTerms), row.id]
+        );
+      }
+    }
 
     await this.setMeta('schema_version', String(SCHEMA_VERSION));
   }
@@ -414,6 +506,15 @@ export class MemoryStore {
     if (!content) throw new Error('content is required');
 
     const fingerprint = makeFingerprint({ kind, title, summary, content, scope, tags });
+    const searchTerms = buildSearchTerms({
+      title,
+      summary,
+      content,
+      scope,
+      tags,
+      links,
+      sourceRef
+    });
     const existing = await this.adapter.get(
       `SELECT id, title, summary, content
          FROM memory_entries
@@ -440,9 +541,9 @@ export class MemoryStore {
         `INSERT INTO memory_entries(
           id, kind, title, summary, content, status, importance, confidence,
           scope_root_path, scope_project_path, scope_branch_name, topic, feature,
-          tags_json, links_json, source_type, source_ref, fingerprint,
+          tags_json, search_terms_json, links_json, source_type, source_ref, fingerprint,
           created_at, updated_at, last_recalled_at, recall_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
         [
           id,
           kind,
@@ -458,6 +559,7 @@ export class MemoryStore {
           scope.topic,
           scope.feature,
           stableJson(tags),
+          stableJson(searchTerms),
           stableJson(links),
           sourceType,
           sourceRef,
@@ -533,6 +635,15 @@ export class MemoryStore {
       scope,
       tags: next.tags
     });
+    const searchTerms = buildSearchTerms({
+      title: next.title,
+      summary: next.summary,
+      content: next.content,
+      scope,
+      tags: next.tags,
+      links: next.links,
+      sourceRef: next.source_ref
+    });
     const updatedAt = nowIso();
     const revision = (existing.revisions?.[0]?.revision || 0) + 1;
 
@@ -543,7 +654,7 @@ export class MemoryStore {
             SET kind = ?, title = ?, summary = ?, content = ?, status = ?,
                 importance = ?, confidence = ?,
                 scope_root_path = ?, scope_project_path = ?, scope_branch_name = ?, topic = ?, feature = ?,
-                tags_json = ?, links_json = ?, source_type = ?, source_ref = ?, fingerprint = ?, updated_at = ?
+                tags_json = ?, search_terms_json = ?, links_json = ?, source_type = ?, source_ref = ?, fingerprint = ?, updated_at = ?
           WHERE id = ?`,
         [
           next.kind,
@@ -559,6 +670,7 @@ export class MemoryStore {
           scope.topic,
           scope.feature,
           stableJson(next.tags),
+          stableJson(searchTerms),
           stableJson(next.links),
           next.source_type,
           next.source_ref,
@@ -622,6 +734,9 @@ export class MemoryStore {
     query,
     projectPath,
     topic,
+    feature,
+    branchName,
+    rootPath,
     kind,
     limit = 10
   }) {
@@ -631,11 +746,11 @@ export class MemoryStore {
     const params = ['active'];
 
     if (projectPath) {
-      filters.push('scope_project_path = ?');
+      filters.push('(scope_project_path = ? OR scope_project_path = \'\')');
       params.push(projectPath);
     }
     if (topic) {
-      filters.push('topic = ?');
+      filters.push('(topic = ? OR topic = \'\')');
       params.push(topic);
     }
     if (kind) {
@@ -655,6 +770,7 @@ export class MemoryStore {
     const terms = splitTerms(query);
     const ranked = rows
       .map((row) => {
+        const searchTerms = JSON.parse(row.search_terms_json || '[]');
         const haystack = [
           row.title,
           row.summary,
@@ -665,14 +781,23 @@ export class MemoryStore {
         ].join('\n').toLowerCase();
 
         let score = row.importance / 100;
+        score += scoreTokenOverlap(terms, searchTerms) * 6;
         for (const term of terms) {
           if (row.title.toLowerCase().includes(term)) score += 5;
           if (row.summary.toLowerCase().includes(term)) score += 3;
+          if (row.content.toLowerCase().includes(term)) score += 1.5;
           if (haystack.includes(term)) score += 1;
         }
-        if (projectPath && row.scope_project_path === projectPath) score += 2;
-        if (topic && row.topic === topic) score += 1;
+        if (terms.length > 1 && textContainsAllTerms(`${row.title} ${row.summary}`, terms)) score += 3;
+        score += scoreScopeMatch(row, {
+          root_path: rootPath,
+          project_path: projectPath,
+          branch_name: branchName,
+          topic,
+          feature
+        });
         if (row.last_recalled_at) score += Math.min(row.recall_count || 0, 5) * 0.1;
+        if (row.kind === 'preference') score += 0.25;
 
         return {
           score,
@@ -745,23 +870,57 @@ export class MemoryStore {
 
     let promotedMemoryId = null;
     if (signalScore >= 3) {
-      const result = await this.storeEntry({
-        kind: input.kind || (eventType === 'preference' ? 'preference' : 'knowledge'),
+      const memoryKind = input.kind || (eventType === 'preference' ? 'preference' : 'knowledge');
+      const mergeTarget = await this.findMergeCandidate({
+        kind: memoryKind,
         title,
         summary,
         content: content || summary,
-        status: input.memory_status || 'active',
-        importance: input.importance === undefined ? Math.min(95, Math.round(signalScore * 20)) : input.importance,
-        confidence: input.confidence === undefined ? Math.min(0.95, 0.45 + (signalScore * 0.1)) : input.confidence,
-        tags,
-        links,
         scope,
-        source_type: 'capture-event',
-        source_ref: sourceRef,
-        change_note: `Auto-captured from ${eventType} event`
+        tags
       });
-      promotedMemoryId = result.memory?.id || null;
-      record.status = result.duplicate ? 'duplicate' : 'promoted';
+
+      if (mergeTarget) {
+        const merged = await this.updateEntry(mergeTarget.id, {
+          summary: this.mergeText(mergeTarget.summary, summary),
+          content: this.mergeText(mergeTarget.content, content || summary),
+          tags: Array.from(new Set([...(mergeTarget.tags || []), ...tags])),
+          links: Array.from(new Map(
+            [...(mergeTarget.links || []), ...links].map((item) => [`${item.path}:${item.line || 0}`, item])
+          ).values()),
+          importance: Math.max(
+            mergeTarget.importance || 0,
+            input.importance || 0,
+            Math.min(95, Math.round(signalScore * 20))
+          ),
+          confidence: Math.max(
+            mergeTarget.confidence || 0,
+            input.confidence || 0,
+            Math.min(0.95, 0.45 + (signalScore * 0.1))
+          ),
+          change_note: `Auto-captured merge from ${eventType} event`
+        });
+        promotedMemoryId = merged.id;
+        record.status = 'merged';
+      } else {
+        const result = await this.storeEntry({
+          kind: memoryKind,
+          title,
+          summary,
+          content: content || summary,
+          status: input.memory_status || 'active',
+          importance: input.importance === undefined ? Math.min(95, Math.round(signalScore * 20)) : input.importance,
+          confidence: input.confidence === undefined ? Math.min(0.95, 0.45 + (signalScore * 0.1)) : input.confidence,
+          tags,
+          links,
+          scope,
+          source_type: 'capture-event',
+          source_ref: sourceRef,
+          change_note: `Auto-captured from ${eventType} event`
+        });
+        promotedMemoryId = result.memory?.id || null;
+        record.status = result.duplicate ? 'duplicate' : 'promoted';
+      }
     }
 
     const insert = await this.adapter.run(
@@ -869,6 +1028,56 @@ export class MemoryStore {
     if (/fix|resolved|decided|remember|always|never|prefer|constraint|important/.test(text)) score += 1;
 
     return score;
+  }
+
+  async findMergeCandidate({ kind, title, summary, content, scope, tags }) {
+    const candidates = await this.adapter.all(
+      `SELECT *
+         FROM memory_entries
+        WHERE status = 'active'
+          AND kind = ?
+          AND scope_project_path = ?
+        ORDER BY updated_at DESC
+        LIMIT 25`,
+      [kind, scope.project_path]
+    );
+
+    const target = { title, summary, content, scope, tags };
+    for (const row of candidates) {
+      const similarity = computeMemorySimilarity(
+        {
+          title: row.title,
+          summary: row.summary,
+          content: row.content,
+          scope: {
+            root_path: row.scope_root_path,
+            project_path: row.scope_project_path,
+            branch_name: row.scope_branch_name,
+            topic: row.topic,
+            feature: row.feature
+          },
+          tags: JSON.parse(row.tags_json || '[]'),
+          links: JSON.parse(row.links_json || '[]'),
+          sourceRef: row.source_ref
+        },
+        target
+      );
+
+      if (similarity >= 0.5) {
+        return this.deserializeEntry(row);
+      }
+    }
+
+    return null;
+  }
+
+  mergeText(existing, incoming) {
+    const base = cleanString(existing, 20000);
+    const next = cleanString(incoming, 20000);
+    if (!next) return base;
+    if (!base) return next;
+    if (base.includes(next)) return base;
+    return `${base}\n\n${next}`.slice(0, 20000).trim();
   }
 
   deserializeEntry(row) {

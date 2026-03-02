@@ -77,6 +77,66 @@ test('memory store lifecycle: create, list, update, recall, delete', async (t) =
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('memory recall ranks scoped relevant memory ahead of weaker matches', async (t) => {
+  if (!await hasSupportedBackend()) {
+    t.skip('No supported sqlite backend available for memory store test');
+    return;
+  }
+
+  const root = makeTempDir();
+  const store = new MemoryStore({
+    enabled: true,
+    backend: 'auto',
+    dbPath: path.join(root, 'memory.db')
+  });
+
+  const authFix = await store.storeEntry({
+    kind: 'knowledge',
+    title: 'Fix auth refresh race',
+    summary: 'Serialize JWT token refresh requests in gateway auth flow',
+    content: 'When multiple requests race, queue token refresh and retry once after refresh completes.',
+    importance: 70,
+    tags: ['auth', 'jwt', 'gateway'],
+    scope: {
+      root_path: '/repo',
+      project_path: '/repo/app',
+      branch_name: 'feature/auth',
+      topic: 'auth',
+      feature: 'refresh'
+    }
+  });
+
+  await store.storeEntry({
+    kind: 'knowledge',
+    title: 'Improve dashboard refresh',
+    summary: 'Refresh dashboard cards after settings save',
+    content: 'This is about dashboard widgets, not authentication.',
+    importance: 90,
+    tags: ['dashboard'],
+    scope: {
+      root_path: '/repo',
+      project_path: '/repo/app',
+      topic: 'ui',
+      feature: 'dashboard'
+    }
+  });
+
+  const recalled = await store.recall({
+    query: 'jwt auth refresh race gateway',
+    rootPath: '/repo',
+    projectPath: '/repo/app',
+    branchName: 'feature/auth',
+    topic: 'auth',
+    feature: 'refresh',
+    limit: 5
+  });
+
+  assert.equal(recalled.count >= 1, true);
+  assert.equal(recalled.items[0].memory.id, authFix.memory.id);
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('memory store dedupes identical scoped entries', async (t) => {
   if (!await hasSupportedBackend()) {
     t.skip('No supported sqlite backend available for memory store test');
@@ -172,6 +232,59 @@ test('captureEvent promotes high-signal events and ignores weak ones', async (t)
   const memories = await store.listEntries({ projectPath: '/repo/app' });
   assert.equal(memories.count, 1);
   assert.equal(memories.items[0].title, 'Fix auth refresh race');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('captureEvent merges into an existing related memory instead of duplicating it', async (t) => {
+  if (!await hasSupportedBackend()) {
+    t.skip('No supported sqlite backend available for memory store test');
+    return;
+  }
+
+  const root = makeTempDir();
+  const store = new MemoryStore({
+    enabled: true,
+    backend: 'auto',
+    dbPath: path.join(root, 'memory.db')
+  });
+
+  const original = await store.storeEntry({
+    kind: 'knowledge',
+    title: 'Fix auth refresh race',
+    summary: 'Serialize token refresh requests',
+    content: 'Queue refresh requests to avoid duplicate token refresh operations.',
+    tags: ['auth', 'jwt'],
+    scope: {
+      project_path: '/repo/app',
+      topic: 'auth'
+    }
+  });
+
+  const captured = await store.captureEvent({
+    event_type: 'bugfix',
+    status: 'resolved',
+    title: 'Fix auth refresh race in gateway',
+    summary: 'Resolved JWT refresh race in gateway flow',
+    content: 'Queue refresh requests and retry once after refresh completes in the auth gateway.',
+    files_changed: 2,
+    has_tests: true,
+    tags: ['auth', 'gateway'],
+    scope: {
+      project_path: '/repo/app',
+      topic: 'auth'
+    }
+  });
+
+  assert.equal(captured.status, 'merged');
+  assert.equal(captured.promoted_memory_id, original.memory.id);
+
+  const memory = await store.getEntry(original.memory.id);
+  assert.equal(memory.revisions.length, 2);
+  assert.equal(memory.content.includes('retry once after refresh completes'), true);
+
+  const allMemories = await store.listEntries({ projectPath: '/repo/app' });
+  assert.equal(allMemories.count, 1);
 
   fs.rmSync(root, { recursive: true, force: true });
 });
