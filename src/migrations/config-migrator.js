@@ -26,6 +26,16 @@ function defaultIndex(localnestHome) {
   };
 }
 
+function defaultMemory(localnestHome) {
+  return {
+    enabled: false,
+    backend: 'auto',
+    dbPath: path.join(localnestHome, 'localnest.memory.db'),
+    autoCapture: false,
+    askForConsentDone: false
+  };
+}
+
 export function ensureConfigUpgraded({ configPath, localnestHome }) {
   if (!configPath || !fs.existsSync(configPath)) {
     return { changed: false, reason: 'missing' };
@@ -58,6 +68,24 @@ export function ensureConfigUpgraded({ configPath, localnestHome }) {
     for (const [k, v] of Object.entries(defaults)) {
       if (parsed.index[k] === undefined || parsed.index[k] === null || parsed.index[k] === '') {
         parsed.index[k] = v;
+        changed = true;
+      }
+    }
+  }
+
+  if (currentVersion < 3) {
+    parsed.version = 3;
+    changed = true;
+  }
+
+  if (!parsed.memory || typeof parsed.memory !== 'object') {
+    parsed.memory = defaultMemory(localnestHome);
+    changed = true;
+  } else {
+    const defaults = defaultMemory(localnestHome);
+    for (const [k, v] of Object.entries(defaults)) {
+      if (parsed.memory[k] === undefined || parsed.memory[k] === null || parsed.memory[k] === '') {
+        parsed.memory[k] = v;
         changed = true;
       }
     }

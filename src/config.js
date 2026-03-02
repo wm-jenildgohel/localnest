@@ -182,19 +182,26 @@ function parseConfigFileSettings(configPath) {
   }
 
   if (!parsed || typeof parsed !== 'object') return {};
-  if (!parsed.index || typeof parsed.index !== 'object') return {};
+
+  const index = parsed.index && typeof parsed.index === 'object' ? parsed.index : {};
+  const memory = parsed.memory && typeof parsed.memory === 'object' ? parsed.memory : {};
 
   return {
-    backend: typeof parsed.index.backend === 'string' ? parsed.index.backend : undefined,
-    dbPath: typeof parsed.index.dbPath === 'string' ? parsed.index.dbPath : undefined,
-    indexPath: typeof parsed.index.indexPath === 'string' ? parsed.index.indexPath : undefined,
-    chunkLines: Number.isFinite(parsed.index.chunkLines) ? parsed.index.chunkLines : undefined,
-    chunkOverlap: Number.isFinite(parsed.index.chunkOverlap) ? parsed.index.chunkOverlap : undefined,
-    maxTermsPerChunk: Number.isFinite(parsed.index.maxTermsPerChunk) ? parsed.index.maxTermsPerChunk : undefined,
-    maxIndexedFiles: Number.isFinite(parsed.index.maxIndexedFiles) ? parsed.index.maxIndexedFiles : undefined,
-    sqliteVecExtensionPath: typeof parsed.index.sqliteVecExtensionPath === 'string'
-      ? parsed.index.sqliteVecExtensionPath
-      : undefined
+    backend: typeof index.backend === 'string' ? index.backend : undefined,
+    dbPath: typeof index.dbPath === 'string' ? index.dbPath : undefined,
+    indexPath: typeof index.indexPath === 'string' ? index.indexPath : undefined,
+    chunkLines: Number.isFinite(index.chunkLines) ? index.chunkLines : undefined,
+    chunkOverlap: Number.isFinite(index.chunkOverlap) ? index.chunkOverlap : undefined,
+    maxTermsPerChunk: Number.isFinite(index.maxTermsPerChunk) ? index.maxTermsPerChunk : undefined,
+    maxIndexedFiles: Number.isFinite(index.maxIndexedFiles) ? index.maxIndexedFiles : undefined,
+    sqliteVecExtensionPath: typeof index.sqliteVecExtensionPath === 'string'
+      ? index.sqliteVecExtensionPath
+      : undefined,
+    memoryEnabled: typeof memory.enabled === 'boolean' ? memory.enabled : undefined,
+    memoryBackend: typeof memory.backend === 'string' ? memory.backend : undefined,
+    memoryDbPath: typeof memory.dbPath === 'string' ? memory.dbPath : undefined,
+    memoryAutoCapture: typeof memory.autoCapture === 'boolean' ? memory.autoCapture : undefined,
+    memoryConsentDone: typeof memory.askForConsentDone === 'boolean' ? memory.askForConsentDone : undefined
   };
 }
 
@@ -285,6 +292,13 @@ export function buildRuntimeConfig(env = process.env) {
         .map((x) => x.trim())
         .filter(Boolean)
     ),
+    memoryEnabled: parseBoolean(env.LOCALNEST_MEMORY_ENABLED, fileSettings.memoryEnabled || false),
+    memoryBackend: parseStringEnv(env.LOCALNEST_MEMORY_BACKEND, fileSettings.memoryBackend || 'auto'),
+    memoryDbPath: path.resolve(
+      env.LOCALNEST_MEMORY_DB_PATH || fileSettings.memoryDbPath || path.join(localnestHome, 'localnest.memory.db')
+    ),
+    memoryAutoCapture: parseBoolean(env.LOCALNEST_MEMORY_AUTO_CAPTURE, fileSettings.memoryAutoCapture || false),
+    memoryConsentDone: parseBoolean(env.LOCALNEST_MEMORY_CONSENT_DONE, fileSettings.memoryConsentDone || false),
     roots: resolveRoots({
       projectRoots: env.PROJECT_ROOTS,
       localnestConfigPath: configPath

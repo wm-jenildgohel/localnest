@@ -1,6 +1,6 @@
 ---
 name: localnest-mcp
-description: "Install, configure, and use LocalNest MCP for local code retrieval workflows. Trigger this skill when user requests are about project files, code, or repository data under configured local roots (for example: find symbol, read file, summarize project, search codebase, compare files, inspect folder tree, index/search local docs). Use for setup, MCP config guidance, daily localnest_* tool usage flow, and troubleshooting for doctor/import/file-size/search/index issues."
+description: "Install, configure, and use LocalNest MCP for local code retrieval and memory workflows. Trigger this skill when user requests are about project files, code, repository data, or durable local agent memory under configured roots (for example: find symbol, read file, summarize project, search codebase, compare files, inspect folder tree, index/search local docs, recall prior project decisions, store agent memory). Use for setup, MCP config guidance, daily localnest_* tool usage flow, memory recall/capture flow, and troubleshooting for doctor/import/file-size/search/index issues."
 ---
 
 # LocalNest MCP
@@ -14,6 +14,7 @@ Activate LocalNest MCP when:
 - User asks to search or read content from data already present in configured roots.
 - User asks for project summaries, root/project listing, or targeted file ranges.
 - User asks semantic/hybrid retrieval over local code/docs.
+- User asks to preserve, recall, inspect, or manage local agent memory tied to a project.
 
 Do not activate LocalNest MCP when:
 - User asks for internet-only/current-events data.
@@ -56,16 +57,19 @@ npx -y localnest-mcp-doctor
 
 ## Use LocalNest Tools
 
-Default retrieval workflow:
+Default retrieval + memory workflow:
 1. `localnest_server_status`
-2. `localnest_update_status` ← check for urgent fixes/new features first
-3. `localnest_list_roots`
-4. `localnest_list_projects`
-5. **`localnest_search_files`** ← start here for module/feature discovery
-6. `localnest_index_status`
-7. `localnest_index_project`
-8. `localnest_search_hybrid` ← for concept/content retrieval
-9. `localnest_read_file`
+2. `localnest_memory_status`
+3. `localnest_update_status` ← check for urgent fixes/new features first
+4. `localnest_list_roots`
+5. `localnest_list_projects`
+6. `localnest_memory_recall` ← before starting substantive work when memory is enabled
+7. **`localnest_search_files`** ← start here for module/feature discovery
+8. `localnest_index_status`
+9. `localnest_index_project`
+10. `localnest_search_hybrid` ← for concept/content retrieval
+11. `localnest_read_file`
+12. `localnest_memory_capture_event` ← after meaningful work when memory auto-capture is enabled
 
 Call `localnest_usage_guide` at any time to get embedded best-practice guidance from the server itself.
 
@@ -77,6 +81,8 @@ Do not run the full sequence blindly on every request. Adapt by intent:
 - If user asks concept/"how it works": run `localnest_search_hybrid` (after index check).
 - If user already gave a file path + line concern: go directly to `localnest_read_file`.
 - If index is stale/empty: run `localnest_index_project` only for the needed `project_path`.
+- If memory is enabled and the task is non-trivial: run `localnest_memory_recall` before analysis.
+- After a bug fix, design decision, review outcome, or user preference discovery: emit `localnest_memory_capture_event`.
 
 Answer strategy:
 - Prefer shortest path to evidence.
@@ -87,11 +93,13 @@ Answer strategy:
 ### AI quality rules (critical)
 
 - Do not answer from memory when a LocalNest tool can verify it.
+- Use memory as guidance, not as final evidence. Verify with code/file tools before concluding.
 - Cite concrete files/lines after `localnest_read_file` before giving conclusions.
 - If search is empty, show what was searched (`query`, `project_path`, `glob`) and immediately try a fallback strategy (synonyms, regex, broader scope).
 - For bug triage, run both:
   - `localnest_search_code` for exact error/symbol
   - `localnest_search_hybrid` for architecture/context
+- If memory is enabled, also run `localnest_memory_recall` for prior fixes/preferences in the same scope.
 - If `updates.is_outdated=true`, ask the user:
   - "LocalNest has a newer version. Do you want to update now?"
   - If user approves, call `localnest_update_self(approved_by_user=true)`.
@@ -122,6 +130,53 @@ Returns structured best-practice guidance for users and AI agents. No params. Ca
 
 ### `localnest_server_status`
 Returns runtime config: active roots, ripgrep status, index backend (`sqlite-vec` or `json`), chunk settings, and update status metadata. Always call first in a new session.
+
+### `localnest_memory_status`
+Returns memory consent state, backend compatibility, active database path, and store status. Call before using memory tools. If memory is disabled, do not use recall/capture tools until the user opts in during setup.
+
+### `localnest_memory_recall`
+Recalls the most relevant local memories for a task/query. Params:
+- `query` (required)
+- `project_path` (optional)
+- `topic` (optional)
+- `kind` (`knowledge` or `preference`)
+- `limit`
+
+Use at the start of substantive tasks when memory is enabled. Treat results as hints that must be verified against current files.
+
+### `localnest_memory_capture_event`
+Background event ingest tool for automatic memory flow. Params:
+- `event_type` (`task`, `bugfix`, `decision`, `review`, `preference`)
+- `status` (`in_progress`, `completed`, `resolved`, `ignored`, `merged`)
+- `title`
+- `summary`
+- `content`
+- `files_changed`
+- `has_tests`
+- `tags`
+- `links`
+- `scope`
+- `source_ref`
+
+Use this after meaningful work. High-signal events are auto-promoted into durable memory; weak exploratory events are recorded and ignored.
+
+### `localnest_memory_events`
+Lists recent memory capture events and whether they were promoted into durable memory. Use to inspect background capture behavior.
+
+### `localnest_memory_list`
+Lists stored memories. Supports filtering by `kind`, `status`, `project_path`, `topic`, `limit`, and `offset`.
+
+### `localnest_memory_get`
+Fetches a memory entry with revision history.
+
+### `localnest_memory_store`
+Manual durable memory write. Use for explicit corrections or when automatic capture is not appropriate.
+
+### `localnest_memory_update`
+Updates a memory and appends a revision.
+
+### `localnest_memory_delete`
+Deletes a memory entry and all its revisions.
 
 ### `localnest_update_status`
 Checks npm for latest package version with local caching (default interval 120 minutes). Params: `force_check` (bool, default false). Use this to decide whether to ask user to update.
@@ -199,10 +254,12 @@ High-level summary: language breakdown, extension stats, file counts. Params: `p
 ## Evidence-First Pattern
 
 1. Discover scope (`localnest_list_roots`, `localnest_list_projects`).
-2. **Find module/feature** (`localnest_search_files`) — search by path/name first.
-3. Retrieve content (`localnest_search_hybrid` or `localnest_search_code`) scoped to the found path.
-4. Validate with exact lines (`localnest_read_file`).
-5. Answer with file-grounded results.
+2. Check memory state (`localnest_memory_status`) and recall prior context (`localnest_memory_recall`) when enabled.
+3. **Find module/feature** (`localnest_search_files`) — search by path/name first.
+4. Retrieve content (`localnest_search_hybrid` or `localnest_search_code`) scoped to the found path.
+5. Validate with exact lines (`localnest_read_file`).
+6. Answer with file-grounded results.
+7. After meaningful work, emit `localnest_memory_capture_event`.
 
 ## Troubleshooting
 
@@ -253,6 +310,18 @@ Use `**/*.ts` not `*.ts`. The glob is matched against the relative file path fro
 LocalNest auto-falls back to JSON backend. Confirm active backend via:
 - `localnest_server_status` → `vector_index.backend` (actual) vs `vector_index.requested_backend` (configured)
 - `localnest_index_status`
+
+### Memory disabled or unavailable
+
+Check:
+- `localnest_memory_status`
+
+Common causes:
+- User did not opt in during `localnest-mcp-setup`
+- Memory backend unavailable on the current runtime
+- `sqlite3` dependency not installed for Node 18/20 fallback
+
+If disabled, continue using retrieval tools normally and ask the user to rerun setup if they want memory enabled.
 
 ### Duplicate-looking tools in MCP clients
 

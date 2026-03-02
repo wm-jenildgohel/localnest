@@ -1,0 +1,181 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { MemoryStore } from '../src/services/memory-store.js';
+
+function makeTempDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-memory-test-'));
+}
+
+async function hasSupportedBackend() {
+  try {
+    const mod = await import('node:sqlite');
+    if (mod?.DatabaseSync) return true;
+  } catch {}
+
+  try {
+    const mod = await import('sqlite3');
+    return Boolean(mod?.Database || mod?.default?.Database);
+  } catch {
+    return false;
+  }
+}
+
+test('memory store lifecycle: create, list, update, recall, delete', async (t) => {
+  if (!await hasSupportedBackend()) {
+    t.skip('No supported sqlite backend available for memory store test');
+    return;
+  }
+
+  const root = makeTempDir();
+  const store = new MemoryStore({
+    enabled: true,
+    backend: 'auto',
+    dbPath: path.join(root, 'memory.db')
+  });
+
+  const created = await store.storeEntry({
+    kind: 'knowledge',
+    title: 'Auth bug fix',
+    summary: 'JWT refresh bug was fixed in auth middleware',
+    content: 'Remember to refresh JWT before proxying API requests.',
+    importance: 75,
+    tags: ['auth', 'jwt'],
+    scope: {
+      project_path: '/repo/app',
+      topic: 'auth'
+    }
+  });
+
+  assert.equal(created.created, true);
+  assert.ok(created.memory.id);
+
+  const listed = await store.listEntries({ projectPath: '/repo/app', topic: 'auth' });
+  assert.equal(listed.count, 1);
+  assert.equal(listed.items[0].title, 'Auth bug fix');
+
+  const updated = await store.updateEntry(created.memory.id, {
+    summary: 'JWT refresh bug was fixed in auth middleware and gateway',
+    change_note: 'Expanded fix context'
+  });
+  assert.equal(updated.summary.includes('gateway'), true);
+  assert.equal(updated.revisions.length, 2);
+
+  const recalled = await store.recall({
+    query: 'jwt auth refresh fix',
+    projectPath: '/repo/app',
+    topic: 'auth',
+    limit: 5
+  });
+  assert.equal(recalled.count, 1);
+  assert.equal(recalled.items[0].memory.id, created.memory.id);
+
+  const deleted = await store.deleteEntry(created.memory.id);
+  assert.equal(deleted.deleted, true);
+
+  const afterDelete = await store.listEntries({ projectPath: '/repo/app' });
+  assert.equal(afterDelete.count, 0);
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('memory store dedupes identical scoped entries', async (t) => {
+  if (!await hasSupportedBackend()) {
+    t.skip('No supported sqlite backend available for memory store test');
+    return;
+  }
+
+  const root = makeTempDir();
+  const store = new MemoryStore({
+    enabled: true,
+    backend: 'auto',
+    dbPath: path.join(root, 'memory.db')
+  });
+
+  const first = await store.storeEntry({
+    kind: 'preference',
+    title: 'Use rg first',
+    summary: 'Prefer ripgrep for text search',
+    content: 'Always use rg before grep in this repository.',
+    scope: {
+      project_path: '/repo/app',
+      topic: 'workflow'
+    }
+  });
+  const second = await store.storeEntry({
+    kind: 'preference',
+    title: 'Use rg first',
+    summary: 'Prefer ripgrep for text search',
+    content: 'Always use rg before grep in this repository.',
+    scope: {
+      project_path: '/repo/app',
+      topic: 'workflow'
+    }
+  });
+
+  assert.equal(first.created, true);
+  assert.equal(second.created, false);
+  assert.equal(second.duplicate, true);
+  assert.equal(second.memory.id, first.memory.id);
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('captureEvent promotes high-signal events and ignores weak ones', async (t) => {
+  if (!await hasSupportedBackend()) {
+    t.skip('No supported sqlite backend available for memory store test');
+    return;
+  }
+
+  const root = makeTempDir();
+  const store = new MemoryStore({
+    enabled: true,
+    backend: 'auto',
+    dbPath: path.join(root, 'memory.db')
+  });
+
+  const promoted = await store.captureEvent({
+    event_type: 'bugfix',
+    status: 'resolved',
+    title: 'Fix auth refresh race',
+    summary: 'Resolved race in auth refresh handling',
+    content: 'Fix auth refresh race by serializing token refresh and retrying once.',
+    files_changed: 3,
+    has_tests: true,
+    tags: ['auth', 'race'],
+    scope: {
+      project_path: '/repo/app',
+      topic: 'auth'
+    }
+  });
+
+  assert.equal(promoted.status, 'promoted');
+  assert.ok(promoted.promoted_memory_id);
+
+  const weak = await store.captureEvent({
+    event_type: 'task',
+    status: 'in_progress',
+    title: 'Looked at auth folder',
+    summary: 'Explored files',
+    content: 'Opened files to understand layout.',
+    files_changed: 0,
+    has_tests: false,
+    scope: {
+      project_path: '/repo/app'
+    }
+  });
+
+  assert.equal(weak.status, 'ignored');
+  assert.equal(weak.promoted_memory_id, null);
+
+  const events = await store.listEvents({ projectPath: '/repo/app' });
+  assert.equal(events.count, 2);
+
+  const memories = await store.listEntries({ projectPath: '/repo/app' });
+  assert.equal(memories.count, 1);
+  assert.equal(memories.items[0].title, 'Fix auth refresh race');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});

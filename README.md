@@ -6,7 +6,7 @@
 [![Quality](https://github.com/wm-jenildgohel/localnest/actions/workflows/quality.yml/badge.svg?branch=beta)](https://github.com/wm-jenildgohel/localnest/actions/workflows/quality.yml)
 [![CodeQL](https://github.com/wm-jenildgohel/localnest/actions/workflows/codeql.yml/badge.svg?branch=beta)](https://github.com/wm-jenildgohel/localnest/actions/workflows/codeql.yml)
 
-A local-first MCP server that gives AI agents safe, read-only access to your codebase — with optional semantic indexing for high-quality retrieval.
+A local-first MCP server that gives AI agents safe access to your codebase, plus optional local memory and semantic indexing for high-quality retrieval.
 
 ## What It Does
 
@@ -15,6 +15,7 @@ A local-first MCP server that gives AI agents safe, read-only access to your cod
 - **Semantic indexing** — `sqlite-vec` or JSON backend, fully local
 - **Hybrid retrieval** — lexical + semantic fusion with RRF ranking
 - **Project introspection** — roots, projects, tree, summaries
+- **Local agent memory** — durable project knowledge, preferences, and recall, stored on your machine
 
 All data stays on your machine. No external indexing service required.
 
@@ -66,7 +67,10 @@ After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client
         "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
         "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
         "LOCALNEST_DB_PATH": "~/.localnest/localnest.db",
-        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json"
+        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json",
+        "LOCALNEST_MEMORY_ENABLED": "false",
+        "LOCALNEST_MEMORY_BACKEND": "auto",
+        "LOCALNEST_MEMORY_DB_PATH": "~/.localnest/localnest.memory.db"
       }
     }
   }
@@ -90,6 +94,15 @@ startup_timeout_sec = 30
 |---|---|
 | `localnest_usage_guide` | Best-practice guidance for agents — call this first when unsure |
 | `localnest_server_status` | Runtime config, roots, ripgrep status, index backend |
+| `localnest_memory_status` | Memory consent, backend compatibility, database status |
+| `localnest_memory_list` | List stored memories |
+| `localnest_memory_get` | Fetch one memory with revision history |
+| `localnest_memory_store` | Store a durable memory manually |
+| `localnest_memory_update` | Update a memory and append a revision |
+| `localnest_memory_delete` | Delete a memory |
+| `localnest_memory_recall` | Recall relevant memories for a task/query |
+| `localnest_memory_capture_event` | Background event ingest that auto-promotes meaningful events into memory |
+| `localnest_memory_events` | Inspect recently captured memory events |
 | `localnest_update_status` | Check npm for latest LocalNest version (cached interval) |
 | `localnest_update_self` | Update LocalNest globally and sync bundled skill (approval required) |
 | `localnest_list_roots` | List configured roots |
@@ -110,9 +123,11 @@ Only canonical `localnest_*` tool names are exposed (no short aliases) to keep M
 
 **Recommended agent workflow:**
 ```
-localnest_server_status → localnest_update_status → localnest_list_roots → localnest_list_projects
+localnest_server_status → localnest_memory_status → localnest_update_status → localnest_list_roots → localnest_list_projects
+→ localnest_memory_recall
 → localnest_index_status → localnest_index_project
 → localnest_search_hybrid → localnest_read_file
+→ localnest_memory_capture_event
 ```
 
 ## Index Backend
@@ -147,9 +162,33 @@ Setup writes two files:
 | `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | Overlap between chunks |
 | `LOCALNEST_VECTOR_MAX_TERMS` | `80` | Max terms per chunk |
 | `LOCALNEST_VECTOR_MAX_FILES` | `20000` | Max files per index run |
+| `LOCALNEST_MEMORY_ENABLED` | `false` | Enable local memory subsystem |
+| `LOCALNEST_MEMORY_BACKEND` | `auto` | `auto`, `node-sqlite`, or `sqlite3` |
+| `LOCALNEST_MEMORY_DB_PATH` | `~/.localnest/localnest.memory.db` | SQLite memory database path |
+| `LOCALNEST_MEMORY_AUTO_CAPTURE` | `false` | Allow background event ingest to promote memories automatically |
+| `LOCALNEST_MEMORY_CONSENT_DONE` | `false` | Indicates setup consent was already collected |
 | `LOCALNEST_UPDATE_PACKAGE` | `localnest-mcp` | npm package name to check/update |
 | `LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES` | `120` | Refresh interval for npm update checks |
 | `LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES` | `15` | Retry interval when npm check fails |
+
+## Local Memory
+
+Memory is opt-in during `localnest-mcp-setup`. When enabled, LocalNest stores durable project knowledge and preferences in a local SQLite database.
+
+- Node 22+ can use built-in `node:sqlite`
+- Node 18/20 can use the bundled `sqlite3` dependency
+- If memory backend initialization fails, existing code search and read tools still work
+
+For agents, the intended flow is:
+
+```text
+localnest_memory_status
+→ localnest_memory_recall
+→ work with code/search tools
+→ localnest_memory_capture_event
+```
+
+`localnest_memory_capture_event` is designed for automatic/background use by AI tools. High-signal events such as bug fixes, decisions, reviews, and user preferences are promoted into durable memories; weak exploratory events are recorded and ignored.
 
 ## Auto-Migration
 

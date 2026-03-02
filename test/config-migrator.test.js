@@ -41,14 +41,17 @@ test('ensureConfigUpgraded migrates old config and creates backup', () => {
 
   const result = ensureConfigUpgraded({ configPath: cfgPath, localnestHome: root });
   assert.equal(result.changed, true);
-  assert.equal(result.version, 2);
+  assert.equal(result.version, 3);
   assert.ok(result.backupPath);
   assert.ok(fs.existsSync(result.backupPath));
 
   const upgraded = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  assert.equal(upgraded.version, 2);
+  assert.equal(upgraded.version, 3);
   assert.equal(upgraded.index.backend, 'sqlite-vec');
   assert.equal(upgraded.index.maxIndexedFiles, 20000);
+  assert.equal(upgraded.memory.enabled, false);
+  assert.equal(upgraded.memory.backend, 'auto');
+  assert.equal(upgraded.memory.autoCapture, false);
 
   fs.rmSync(root, { recursive: true, force: true });
 });
@@ -57,7 +60,7 @@ test('ensureConfigUpgraded returns up-to-date without rewrite', () => {
   const root = makeTempDir();
   const cfgPath = path.join(root, 'localnest.config.json');
   const data = {
-    version: 2,
+    version: 3,
     roots: [{ label: 'x', path: root }],
     index: {
       backend: 'sqlite-vec',
@@ -67,6 +70,13 @@ test('ensureConfigUpgraded returns up-to-date without rewrite', () => {
       chunkOverlap: 15,
       maxTermsPerChunk: 80,
       maxIndexedFiles: 20000
+    },
+    memory: {
+      enabled: true,
+      backend: 'auto',
+      dbPath: path.join(root, 'memory.sqlite'),
+      autoCapture: true,
+      askForConsentDone: true
     }
   };
   fs.writeFileSync(cfgPath, JSON.stringify(data, null, 2), 'utf8');

@@ -7,9 +7,27 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Automatic npm update checks with local cache/backoff via new `UpdateService`.
 - New MCP tools:
+  - `localnest_memory_status` (memory consent, backend compatibility, and database/store status)
+  - `localnest_memory_list` (list stored memories with pagination/filtering)
+  - `localnest_memory_get` (fetch one memory with revision history)
+  - `localnest_memory_store` (manual durable memory write)
+  - `localnest_memory_update` (update memory and append a revision)
+  - `localnest_memory_delete` (delete a memory and its revisions)
+  - `localnest_memory_recall` (recall relevant memories for a task/query)
+  - `localnest_memory_capture_event` (background event ingest with automatic promotion for high-signal events)
+  - `localnest_memory_events` (inspect recent capture events and promotion outcomes)
   - `localnest_update_status` (cached npm version check with optional force refresh)
   - `localnest_update_self` (approved self-update + bundled skill sync, with dry-run support)
+- Local memory subsystem:
+  - SQLite-backed canonical memory store with revisions, scoped metadata, recall counters, and dedupe fingerprinting
+  - background capture event log with promotion/ignore decisions
+  - Node 22+ `node:sqlite` support with `sqlite3` fallback for Node 18/20
 - New runtime env settings:
+  - `LOCALNEST_MEMORY_ENABLED`
+  - `LOCALNEST_MEMORY_BACKEND`
+  - `LOCALNEST_MEMORY_DB_PATH`
+  - `LOCALNEST_MEMORY_AUTO_CAPTURE`
+  - `LOCALNEST_MEMORY_CONSENT_DONE`
   - `LOCALNEST_UPDATE_PACKAGE`
   - `LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES`
   - `LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES`
@@ -17,13 +35,19 @@ All notable changes to this project will be documented in this file.
 - GitHub CodeQL workflow (`.github/workflows/codeql.yml`) for static security analysis.
 - Dependabot configuration (`.github/dependabot.yml`) for npm and GitHub Actions dependency updates.
 - Additional automated tests for:
+  - memory store lifecycle (create/list/update/recall/delete)
+  - memory dedupe behavior
+  - memory event promotion vs ignored-event behavior
+  - config/runtime memory settings and migration coverage
   - update interval clamping in runtime config
   - self-update dry-run behavior
   - install failure and skill-sync failure branches
 
 ### Changed
+- `localnest-mcp-setup` now asks for one-time user consent before enabling local memory and persists memory config into `localnest.config.json` and generated MCP snippets.
+- README, bundled `SKILL.md`, and OpenAI agent manifest now document retrieval + memory flow, including pre-task recall and post-task capture guidance.
 - `localnest_server_status` now includes structured `updates` metadata so agents can prompt users proactively when a newer version is available.
-- `localnest_usage_guide` and bundled `SKILL.md` expanded with explicit update flow and stronger evidence-first retrieval guidance.
+- `localnest_usage_guide` and bundled `SKILL.md` expanded with explicit update flow, memory workflow guidance, and stronger evidence-first retrieval guidance.
 
 ## [0.0.3] - 2026-02-27
 

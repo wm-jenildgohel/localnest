@@ -17,6 +17,7 @@ const configPath = path.join(localnestHome, 'localnest.config.json');
 const snippetPath = path.join(localnestHome, 'mcp.localnest.json');
 const defaultDbPath = path.join(localnestHome, 'localnest.db');
 const defaultJsonIndexPath = path.join(localnestHome, 'localnest.index.json');
+const defaultMemoryDbPath = path.join(localnestHome, 'localnest.memory.db');
 const argv = process.argv.slice(2);
 
 function isDir(p) {
@@ -108,7 +109,10 @@ function buildClientSnippet(packageRef, indexConfig) {
           LOCALNEST_CONFIG: configPath,
           LOCALNEST_INDEX_BACKEND: indexConfig.backend,
           LOCALNEST_DB_PATH: indexConfig.dbPath,
-          LOCALNEST_INDEX_PATH: indexConfig.indexPath
+          LOCALNEST_INDEX_PATH: indexConfig.indexPath,
+          LOCALNEST_MEMORY_ENABLED: String(indexConfig.memory.enabled),
+          LOCALNEST_MEMORY_BACKEND: indexConfig.memory.backend,
+          LOCALNEST_MEMORY_DB_PATH: indexConfig.memory.dbPath
         }
       }
     }
@@ -126,7 +130,10 @@ function buildGlobalClientSnippet(indexConfig) {
           LOCALNEST_CONFIG: configPath,
           LOCALNEST_INDEX_BACKEND: indexConfig.backend,
           LOCALNEST_DB_PATH: indexConfig.dbPath,
-          LOCALNEST_INDEX_PATH: indexConfig.indexPath
+          LOCALNEST_INDEX_PATH: indexConfig.indexPath,
+          LOCALNEST_MEMORY_ENABLED: String(indexConfig.memory.enabled),
+          LOCALNEST_MEMORY_BACKEND: indexConfig.memory.backend,
+          LOCALNEST_MEMORY_DB_PATH: indexConfig.memory.dbPath
         }
       }
     }
@@ -159,7 +166,7 @@ function saveOutputs(roots, packageRef, indexConfig) {
   fs.mkdirSync(localnestHome, { recursive: true });
   const config = {
     name: 'localnest',
-    version: 1,
+    version: 3,
     updatedAt: new Date().toISOString(),
     roots,
     index: {
@@ -170,6 +177,13 @@ function saveOutputs(roots, packageRef, indexConfig) {
       chunkOverlap: indexConfig.chunkOverlap,
       maxTermsPerChunk: indexConfig.maxTermsPerChunk,
       maxIndexedFiles: indexConfig.maxIndexedFiles
+    },
+    memory: {
+      enabled: indexConfig.memory.enabled,
+      backend: indexConfig.memory.backend,
+      dbPath: indexConfig.memory.dbPath,
+      autoCapture: indexConfig.memory.autoCapture,
+      askForConsentDone: indexConfig.memory.askForConsentDone
     }
   };
 
@@ -221,12 +235,24 @@ async function main() {
       chunkLines: 60,
       chunkOverlap: 15,
       maxTermsPerChunk: 80,
-      maxIndexedFiles: 20000
+      maxIndexedFiles: 20000,
+      memory: {
+        enabled: false,
+        backend: 'auto',
+        dbPath: defaultMemoryDbPath,
+        autoCapture: false,
+        askForConsentDone: false
+      }
     });
     printSuccess(packageRef, {
       backend: 'sqlite-vec',
       dbPath: defaultDbPath,
-      indexPath: defaultJsonIndexPath
+      indexPath: defaultJsonIndexPath,
+      memory: {
+        enabled: false,
+        backend: 'auto',
+        dbPath: defaultMemoryDbPath
+      }
     });
     return;
   }
@@ -324,6 +350,16 @@ async function main() {
     const maxTermsPerChunk = Number.parseInt(maxTermsInput || '80', 10) || 80;
     const maxIndexedFiles = Number.parseInt(maxFilesInput || '20000', 10) || 20000;
 
+    console.log('');
+    console.log('Local memory setup:');
+    console.log('LocalNest can keep automatic local memory for future agent sessions.');
+    console.log('This is opt-in and stays on your machine.');
+    const memoryConsentAnswer = (await rl.question('Enable automatic local memory capture? [y/N]: ')).trim().toLowerCase();
+    const memoryEnabled = memoryConsentAnswer === 'y' || memoryConsentAnswer === 'yes';
+    const suggestedMemoryDbPath = defaultMemoryDbPath;
+    const memoryDbPathInput = (await rl.question(`Memory SQLite DB path [${suggestedMemoryDbPath}]: `)).trim();
+    const memoryDbPath = path.resolve(expandHome(memoryDbPathInput || suggestedMemoryDbPath));
+
     saveOutputs(roots, packageRef, {
       backend,
       dbPath,
@@ -331,12 +367,24 @@ async function main() {
       chunkLines,
       chunkOverlap,
       maxTermsPerChunk,
-      maxIndexedFiles
+      maxIndexedFiles,
+      memory: {
+        enabled: memoryEnabled,
+        backend: 'auto',
+        dbPath: memoryDbPath,
+        autoCapture: memoryEnabled,
+        askForConsentDone: true
+      }
     });
     printSuccess(packageRef, {
       backend,
       dbPath,
-      indexPath
+      indexPath,
+      memory: {
+        enabled: memoryEnabled,
+        backend: 'auto',
+        dbPath: memoryDbPath
+      }
     });
   } finally {
     rl.close();
