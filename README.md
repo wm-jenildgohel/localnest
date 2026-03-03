@@ -3,10 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/localnest-mcp)](https://www.npmjs.com/package/localnest-mcp)
 [![Node.js](https://img.shields.io/node/v/localnest-mcp)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Quality](https://github.com/wm-jenildgohel/localnest/actions/workflows/quality.yml/badge.svg?branch=beta)](https://github.com/wm-jenildgohel/localnest/actions/workflows/quality.yml)
-[![CodeQL](https://github.com/wm-jenildgohel/localnest/actions/workflows/codeql.yml/badge.svg?branch=beta)](https://github.com/wm-jenildgohel/localnest/actions/workflows/codeql.yml)
+[![Quality](https://github.com/wmt-mobile/localnest/actions/workflows/quality.yml/badge.svg?branch=beta)](https://github.com/wmt-mobile/localnest/actions/workflows/quality.yml)
+[![CodeQL](https://github.com/wmt-mobile/localnest/actions/workflows/codeql.yml/badge.svg?branch=beta)](https://github.com/wmt-mobile/localnest/actions/workflows/codeql.yml)
+[![Socket Badge](https://badge.socket.dev/npm/package/localnest-mcp/0.0.3)](https://badge.socket.dev/npm/package/localnest-mcp/0.0.3)
 
 A local-first MCP server that gives AI agents safe access to your codebase, plus optional local memory and semantic indexing for high-quality retrieval.
+
+Documentation: https://wmt-mobile.github.io/localnest/
 
 ## What It Does
 
@@ -215,12 +218,22 @@ localnest-mcp-install-skill --force
 
 **Install from GitHub via skills.sh:**
 ```bash
-npx skills add https://github.com/wm-jenildgohel/localnest --skill localnest-mcp
+npx skills add https://github.com/wmt-mobile/localnest --skill localnest-mcp
 ```
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## Docs Site
+
+The Docusaurus documentation site lives in [`localnest-docs/`](./localnest-docs).
+
+```bash
+cd localnest-docs
+npm install
+npm run start
+```
 
 ## Trust And Security Testing
 
@@ -230,5 +243,5 @@ LocalNest follows the common OSS security pipeline pattern used across GitHub re
 - OpenSSF Scorecard scan + SARIF upload: [scorecards.yml](./.github/workflows/scorecards.yml)
 - CodeQL static analysis: [codeql.yml](./.github/workflows/codeql.yml)
 - Dependency and GitHub Actions update automation: [.github/dependabot.yml](./.github/dependabot.yml)
-- Public Scorecard report (when indexed/public): https://scorecard.dev/viewer/?uri=github.com/wm-jenildgohel/localnest
+- Public Scorecard report (when indexed/public): https://scorecard.dev/viewer/?uri=github.com/wmt-mobile/localnest
   

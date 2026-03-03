@@ -12,7 +12,7 @@
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Report vulnerabilities privately via [GitHub Security Advisories](https://github.com/wm-jenildgohel/localnest/security/advisories/new).
+Report vulnerabilities privately via [GitHub Security Advisories](https://github.com/wmt-mobile/localnest/security/advisories/new).
 
 Include:
 - A description of the vulnerability and its potential impact
