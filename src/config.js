@@ -1,8 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { ensureConfigUpgraded } from './migrations/config-migrator.js';
+import {
+  buildLocalnestPaths,
+  migrateLocalnestHomeLayout,
+  resolveConfigPath as resolveDefaultConfigPath,
+  resolveLocalnestHome
+} from './home-layout.js';
 
 function parseBoolean(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -226,8 +231,9 @@ function detectRipgrep() {
 }
 
 export function buildRuntimeConfig(env = process.env) {
-  const localnestHome = path.resolve(env.LOCALNEST_HOME || path.join(os.homedir(), '.localnest'));
-  const configPath = env.LOCALNEST_CONFIG || 'localnest.config.json';
+  const localnestHome = resolveLocalnestHome(env);
+  const layout = migrateLocalnestHomeLayout(localnestHome).paths;
+  const configPath = resolveDefaultConfigPath({ env, localnestHome });
   const migration = ensureConfigUpgraded({
     configPath: path.resolve(configPath),
     localnestHome
@@ -248,10 +254,10 @@ export function buildRuntimeConfig(env = process.env) {
     forceSplitChildren: parseBoolean(env.LOCALNEST_FORCE_SPLIT_CHILDREN, false),
     indexBackend: parseStringEnv(env.LOCALNEST_INDEX_BACKEND, fileSettings.backend || 'sqlite-vec'),
     vectorIndexPath: path.resolve(
-      env.LOCALNEST_INDEX_PATH || fileSettings.indexPath || path.join(localnestHome, 'localnest.index.json')
+      env.LOCALNEST_INDEX_PATH || fileSettings.indexPath || layout.jsonIndexPath
     ),
     sqliteDbPath: path.resolve(
-      env.LOCALNEST_DB_PATH || fileSettings.dbPath || path.join(localnestHome, 'localnest.db')
+      env.LOCALNEST_DB_PATH || fileSettings.dbPath || layout.sqliteDbPath
     ),
     sqliteVecExtensionPath: parseStringEnv(
       env.LOCALNEST_SQLITE_VEC_EXTENSION,
@@ -295,7 +301,7 @@ export function buildRuntimeConfig(env = process.env) {
     memoryEnabled: parseBoolean(env.LOCALNEST_MEMORY_ENABLED, fileSettings.memoryEnabled || false),
     memoryBackend: parseStringEnv(env.LOCALNEST_MEMORY_BACKEND, fileSettings.memoryBackend || 'auto'),
     memoryDbPath: path.resolve(
-      env.LOCALNEST_MEMORY_DB_PATH || fileSettings.memoryDbPath || path.join(localnestHome, 'localnest.memory.db')
+      env.LOCALNEST_MEMORY_DB_PATH || fileSettings.memoryDbPath || layout.memoryDbPath
     ),
     memoryAutoCapture: parseBoolean(env.LOCALNEST_MEMORY_AUTO_CAPTURE, fileSettings.memoryAutoCapture || false),
     memoryConsentDone: parseBoolean(env.LOCALNEST_MEMORY_CONSENT_DONE, fileSettings.memoryConsentDone || false),

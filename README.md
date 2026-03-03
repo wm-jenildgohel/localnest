@@ -62,7 +62,7 @@ localnest-mcp --version
 
 ## MCP Client Configuration
 
-After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client config, or use this template:
+After running setup, copy `~/.localnest/config/mcp.localnest.json` into your MCP client config, or use this template:
 
 ```json
 {
@@ -73,13 +73,13 @@ After running setup, copy `~/.localnest/mcp.localnest.json` into your MCP client
       "startup_timeout_sec": 30,
       "env": {
         "MCP_MODE": "stdio",
-        "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
+        "LOCALNEST_CONFIG": "~/.localnest/config/localnest.config.json",
         "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
-        "LOCALNEST_DB_PATH": "~/.localnest/localnest.db",
-        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json",
+        "LOCALNEST_DB_PATH": "~/.localnest/data/localnest.db",
+        "LOCALNEST_INDEX_PATH": "~/.localnest/data/localnest.index.json",
         "LOCALNEST_MEMORY_ENABLED": "false",
         "LOCALNEST_MEMORY_BACKEND": "auto",
-        "LOCALNEST_MEMORY_DB_PATH": "~/.localnest/localnest.memory.db"
+        "LOCALNEST_MEMORY_DB_PATH": "~/.localnest/data/localnest.memory.db"
       }
     }
   }
@@ -103,6 +103,7 @@ startup_timeout_sec = 30
 |---|---|
 | `localnest_usage_guide` | Best-practice guidance for agents — call this first when unsure |
 | `localnest_server_status` | Runtime config, roots, ripgrep status, index backend |
+| `localnest_task_context` | One-call runtime + memory context for a substantive task |
 | `localnest_memory_status` | Memory consent, backend compatibility, database status |
 | `localnest_memory_list` | List stored memories |
 | `localnest_memory_get` | Fetch one memory with revision history |
@@ -110,6 +111,7 @@ startup_timeout_sec = 30
 | `localnest_memory_update` | Update a memory and append a revision |
 | `localnest_memory_delete` | Delete a memory |
 | `localnest_memory_recall` | Recall relevant memories for a task/query |
+| `localnest_capture_outcome` | One-call outcome capture into the memory event pipeline |
 | `localnest_memory_capture_event` | Background event ingest that auto-promotes meaningful events into memory |
 | `localnest_memory_events` | Inspect recently captured memory events |
 | `localnest_update_status` | Check npm for latest LocalNest version (cached interval) |
@@ -132,11 +134,10 @@ Only canonical `localnest_*` tool names are exposed (no short aliases) to keep M
 
 **Recommended agent workflow:**
 ```
-localnest_server_status → localnest_memory_status → localnest_update_status → localnest_list_roots → localnest_list_projects
-→ localnest_memory_recall
+localnest_server_status → localnest_task_context → localnest_update_status → localnest_list_roots → localnest_list_projects
 → localnest_index_status → localnest_index_project
 → localnest_search_hybrid → localnest_read_file
-→ localnest_memory_capture_event
+→ localnest_capture_outcome
 ```
 
 ## Index Backend
@@ -151,8 +152,11 @@ Choose during setup or via env var:
 ## Configuration Reference
 
 Setup writes two files:
-- `~/.localnest/localnest.config.json` — roots and project settings
-- `~/.localnest/mcp.localnest.json` — ready-to-paste MCP client config block
+- `~/.localnest/config/localnest.config.json` — roots and project settings
+- `~/.localnest/config/mcp.localnest.json` — ready-to-paste MCP client config block
+- `~/.localnest/data/` — sqlite/json index files and memory database
+- `~/.localnest/cache/update-status.json` — cached npm update status
+- `~/.localnest/backups/` — migration and config backups
 
 **Config priority:**
 1. `PROJECT_ROOTS` environment variable
@@ -164,8 +168,8 @@ Setup writes two files:
 | Variable | Default | Description |
 |---|---|---|
 | `LOCALNEST_INDEX_BACKEND` | `sqlite-vec` | `sqlite-vec` or `json` |
-| `LOCALNEST_DB_PATH` | `~/.localnest/localnest.db` | SQLite database path |
-| `LOCALNEST_INDEX_PATH` | `~/.localnest/localnest.index.json` | JSON index path |
+| `LOCALNEST_DB_PATH` | `~/.localnest/data/localnest.db` | SQLite database path |
+| `LOCALNEST_INDEX_PATH` | `~/.localnest/data/localnest.index.json` | JSON index path |
 | `LOCALNEST_SQLITE_VEC_EXTENSION` | — | Optional custom native extension path. If unset, no native extension load is attempted. |
 | `LOCALNEST_VECTOR_CHUNK_LINES` | `60` | Lines per index chunk |
 | `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | Overlap between chunks |
@@ -173,7 +177,7 @@ Setup writes two files:
 | `LOCALNEST_VECTOR_MAX_FILES` | `20000` | Max files per index run |
 | `LOCALNEST_MEMORY_ENABLED` | `false` | Enable local memory subsystem |
 | `LOCALNEST_MEMORY_BACKEND` | `auto` | `auto`, `node-sqlite`, or `sqlite3` |
-| `LOCALNEST_MEMORY_DB_PATH` | `~/.localnest/localnest.memory.db` | SQLite memory database path |
+| `LOCALNEST_MEMORY_DB_PATH` | `~/.localnest/data/localnest.memory.db` | SQLite memory database path |
 | `LOCALNEST_MEMORY_AUTO_CAPTURE` | `false` | Allow background event ingest to promote memories automatically |
 | `LOCALNEST_MEMORY_CONSENT_DONE` | `false` | Indicates setup consent was already collected |
 | `LOCALNEST_UPDATE_PACKAGE` | `localnest-mcp` | npm package name to check/update |
@@ -191,17 +195,18 @@ Memory is opt-in during `localnest-mcp-setup`. When enabled, LocalNest stores du
 For agents, the intended flow is:
 
 ```text
-localnest_memory_status
-→ localnest_memory_recall
+localnest_task_context
 → work with code/search tools
-→ localnest_memory_capture_event
+→ localnest_capture_outcome
 ```
 
-`localnest_memory_capture_event` is designed for automatic/background use by AI tools. High-signal events such as bug fixes, decisions, reviews, and user preferences are promoted into durable memories; weak exploratory events are recorded and ignored.
+Use the lower-level `localnest_memory_status`, `localnest_memory_recall`, and `localnest_memory_capture_event` tools only when you need finer control than the bundled high-level flow.
+
+`localnest_memory_capture_event` is still available for automatic/background use by AI tools. High-signal events such as bug fixes, decisions, reviews, and user preferences are promoted into durable memories; weak exploratory events are recorded and ignored.
 
 ## Auto-Migration
 
-On startup, LocalNest auto-migrates older config schemas. A non-destructive backup (`localnest.config.json.bak.<timestamp>`) is created before any migration. No manual setup rerun needed for normal upgrades.
+On startup, LocalNest auto-migrates older config schemas and the local home layout. Non-destructive config backups are written under `~/.localnest/backups/`. No manual setup rerun is needed for normal upgrades.
 
 ## Skill Distribution
 
@@ -215,6 +220,15 @@ localnest-mcp-install-skill --force
 ```
 
 `localnest-mcp-install-skill` now checks the installed skill version first. If the target skill is already current, it reports that instead of replacing files unnecessarily. Use `--force` to resync anyway.
+
+For deterministic shell hooks or client automation, LocalNest also ships:
+
+```bash
+localnest-mcp-task-context --task "debug auth refresh" --project-path /path/to/project
+localnest-mcp-capture-outcome --task "fix auth refresh" --summary "Serialized refresh requests" --project-path /path/to/project --files-changed 2 --has-tests true
+```
+
+Both commands also accept JSON on stdin.
 
 **Install from GitHub via skills.sh:**
 ```bash

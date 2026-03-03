@@ -65,7 +65,7 @@ npx -y localnest-mcp-doctor
 
 ## MCP client config
 
-After setup, copy `~/.localnest/mcp.localnest.json` into your MCP client configuration.
+After setup, copy `~/.localnest/config/mcp.localnest.json` into your MCP client configuration.
 
 ```json
 {
@@ -76,13 +76,13 @@ After setup, copy `~/.localnest/mcp.localnest.json` into your MCP client configu
       "startup_timeout_sec": 30,
       "env": {
         "MCP_MODE": "stdio",
-        "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
+        "LOCALNEST_CONFIG": "~/.localnest/config/localnest.config.json",
         "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
-        "LOCALNEST_DB_PATH": "~/.localnest/localnest.db",
-        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json",
+        "LOCALNEST_DB_PATH": "~/.localnest/data/localnest.db",
+        "LOCALNEST_INDEX_PATH": "~/.localnest/data/localnest.index.json",
         "LOCALNEST_MEMORY_ENABLED": "true",
         "LOCALNEST_MEMORY_BACKEND": "auto",
-        "LOCALNEST_MEMORY_DB_PATH": "~/.localnest/localnest.memory.db"
+        "LOCALNEST_MEMORY_DB_PATH": "~/.localnest/data/localnest.memory.db"
       }
     }
   }

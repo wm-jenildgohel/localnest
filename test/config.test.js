@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { applyConsolePolicy, buildRuntimeConfig, expandHome } from '../src/config.js';
+import { buildLocalnestPaths } from '../src/home-layout.js';
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-config-test-'));
@@ -21,7 +22,8 @@ test('buildRuntimeConfig prioritizes PROJECT_ROOTS and env tuning', () => {
   const rootA = makeTempDir();
   const rootB = makeTempDir();
   const localnestHome = makeTempDir();
-  const cfgPath = path.join(localnestHome, 'localnest.config.json');
+  const cfgPath = buildLocalnestPaths(localnestHome).configPath;
+  fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
   fs.writeFileSync(cfgPath, JSON.stringify({ version: 2, roots: [{ label: 'cfg', path: rootA }] }), 'utf8');
 
   const runtime = buildRuntimeConfig({
@@ -63,7 +65,8 @@ test('buildRuntimeConfig prioritizes PROJECT_ROOTS and env tuning', () => {
 test('buildRuntimeConfig uses config file roots when PROJECT_ROOTS missing', () => {
   const rootA = makeTempDir();
   const localnestHome = makeTempDir();
-  const cfgPath = path.join(localnestHome, 'localnest.config.json');
+  const cfgPath = buildLocalnestPaths(localnestHome).configPath;
+  fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
   fs.writeFileSync(
     cfgPath,
     JSON.stringify({
@@ -113,6 +116,53 @@ test('buildRuntimeConfig clamps update intervals to safe ranges', () => {
   });
   assert.equal(runtimeHigh.updateCheckIntervalMinutes, 1440);
   assert.equal(runtimeHigh.updateFailureBackoffMinutes, 240);
+
+  fs.rmSync(localnestHome, { recursive: true, force: true });
+});
+
+test('buildRuntimeConfig migrates flat localnest home files into subdirectories', () => {
+  const localnestHome = makeTempDir();
+  const legacyConfig = path.join(localnestHome, 'localnest.config.json');
+  fs.writeFileSync(
+    legacyConfig,
+    JSON.stringify({ version: 3, roots: [{ label: 'cfg-root', path: localnestHome }] }, null, 2),
+    'utf8'
+  );
+  fs.writeFileSync(path.join(localnestHome, 'update-status.json'), JSON.stringify({ ok: true }), 'utf8');
+
+  const runtime = buildRuntimeConfig({
+    LOCALNEST_HOME: localnestHome
+  });
+  const layout = buildLocalnestPaths(localnestHome);
+
+  assert.equal(runtime.sqliteDbPath, layout.sqliteDbPath);
+  assert.equal(runtime.vectorIndexPath, layout.jsonIndexPath);
+  assert.equal(runtime.memoryDbPath, layout.memoryDbPath);
+  assert.ok(fs.existsSync(layout.configPath));
+  assert.ok(fs.existsSync(layout.updateStatusPath));
+  assert.equal(fs.existsSync(legacyConfig), false);
+
+  fs.rmSync(localnestHome, { recursive: true, force: true });
+});
+
+test('buildRuntimeConfig honors legacy LOCALNEST_CONFIG path after layout migration', () => {
+  const localnestHome = makeTempDir();
+  const legacyConfig = path.join(localnestHome, 'localnest.config.json');
+  fs.writeFileSync(
+    legacyConfig,
+    JSON.stringify({ version: 3, roots: [{ label: 'cfg-root', path: localnestHome }] }, null, 2),
+    'utf8'
+  );
+
+  const runtime = buildRuntimeConfig({
+    LOCALNEST_HOME: localnestHome,
+    LOCALNEST_CONFIG: legacyConfig
+  });
+  const layout = buildLocalnestPaths(localnestHome);
+
+  assert.equal(runtime.roots[0].path, localnestHome);
+  assert.ok(fs.existsSync(layout.configPath));
+  assert.equal(fs.existsSync(legacyConfig), false);
 
   fs.rmSync(localnestHome, { recursive: true, force: true });
 });

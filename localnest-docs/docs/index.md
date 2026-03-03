@@ -125,7 +125,7 @@ npx -y localnest-mcp-doctor
     <span>4</span>
     <div>
       <strong>Recall prior context</strong>
-      <p>If memory is enabled, run `localnest_memory_status` and `localnest_memory_recall` before deeper analysis.</p>
+      <p>If memory is enabled, run `localnest_task_context` before deeper analysis so runtime status and relevant memory come back together.</p>
     </div>
   </div>
   <div className="docStep">

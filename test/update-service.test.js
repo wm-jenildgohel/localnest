@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { UpdateService, compareVersions } from '../src/services/update-service.js';
+import { buildLocalnestPaths } from '../src/home-layout.js';
 
 function makeTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-update-test-'));
@@ -36,7 +37,7 @@ test('getStatus fetches npm live result and then serves cache while fresh', asyn
   assert.equal(live.latest_version, '0.0.5');
   assert.equal(live.is_outdated, true);
   assert.equal(live.source, 'live');
-  assert.ok(fs.existsSync(path.join(home, 'update-status.json')));
+  assert.ok(fs.existsSync(buildLocalnestPaths(home).updateStatusPath));
 
   const cached = await service.getStatus({ force: false });
   assert.equal(calls, 1);
@@ -45,8 +46,8 @@ test('getStatus fetches npm live result and then serves cache while fresh', asyn
 
 test('getStatus falls back to cache on npm failure', async () => {
   const home = makeTempHome();
-  const cachePath = path.join(home, 'update-status.json');
-  fs.mkdirSync(home, { recursive: true });
+  const cachePath = buildLocalnestPaths(home).updateStatusPath;
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
   fs.writeFileSync(cachePath, `${JSON.stringify({
     package_name: 'localnest-mcp',
     current_version: '0.0.3',

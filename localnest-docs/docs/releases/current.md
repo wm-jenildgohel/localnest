@@ -24,7 +24,7 @@ Current branch package: `0.0.4-beta.3`
 
 - canonical `localnest_*` tool names
 - lexical, semantic, and hybrid retrieval
-- opt-in local memory tools and capture workflow
+- opt-in local memory tools plus high-level task-context and capture-outcome workflow
 - bundled install skill command
 - version-aware skill sync behavior
 - setup-time memory consent and config migration

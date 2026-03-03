@@ -12,12 +12,16 @@
 
 <div className="docGrid docGrid--2">
   <div className="docPanel">
-    <h3>`~/.localnest/localnest.config.json`</h3>
+    <h3>`~/.localnest/config/localnest.config.json`</h3>
     <p>Stores configured roots, indexing preferences, and memory settings such as consent and memory DB path.</p>
   </div>
   <div className="docPanel">
-    <h3>`~/.localnest/mcp.localnest.json`</h3>
+    <h3>`~/.localnest/config/mcp.localnest.json`</h3>
     <p>Contains the generated `mcpServers.localnest` block for your MCP client configuration.</p>
+  </div>
+  <div className="docPanel">
+    <h3>`~/.localnest/data/*`</h3>
+    <p>Holds the SQLite index, JSON fallback index, and local memory database.</p>
   </div>
 </div>
 
@@ -39,15 +43,15 @@
 | Variable | Default | Description |
 | --- | --- | --- |
 | `LOCALNEST_INDEX_BACKEND` | `sqlite-vec` | index backend |
-| `LOCALNEST_DB_PATH` | `~/.localnest/localnest.db` | SQLite DB path |
-| `LOCALNEST_INDEX_PATH` | `~/.localnest/localnest.index.json` | JSON index path |
+| `LOCALNEST_DB_PATH` | `~/.localnest/data/localnest.db` | SQLite DB path |
+| `LOCALNEST_INDEX_PATH` | `~/.localnest/data/localnest.index.json` | JSON index path |
 | `LOCALNEST_VECTOR_CHUNK_LINES` | `60` | chunk size |
 | `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | chunk overlap |
 | `LOCALNEST_VECTOR_MAX_TERMS` | `80` | max terms per chunk |
 | `LOCALNEST_VECTOR_MAX_FILES` | `20000` | max files per index run |
 | `LOCALNEST_MEMORY_ENABLED` | `false` | enable local memory subsystem |
 | `LOCALNEST_MEMORY_BACKEND` | `auto` | memory backend selection |
-| `LOCALNEST_MEMORY_DB_PATH` | `~/.localnest/localnest.memory.db` | SQLite memory DB path |
+| `LOCALNEST_MEMORY_DB_PATH` | `~/.localnest/data/localnest.memory.db` | SQLite memory DB path |
 | `LOCALNEST_MEMORY_AUTO_CAPTURE` | `false` | background memory capture behavior |
 | `LOCALNEST_MEMORY_CONSENT_DONE` | `false` | whether setup already collected memory consent |
 | `LOCALNEST_UPDATE_PACKAGE` | `localnest-mcp` | package checked for updates |
@@ -57,5 +61,5 @@
 ## Config schema notes
 
 - Setup now writes config schema `version: 3`.
-- Existing configs are auto-migrated on startup, with a timestamped `.bak` backup created before changes.
+- Existing configs and the older flat `.localnest` layout are auto-migrated on startup, with timestamped backups stored under `~/.localnest/backups/`.
 - Memory remains disabled unless the user opted in during setup or explicitly enables it via environment variables.

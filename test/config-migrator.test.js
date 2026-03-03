@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { ensureConfigUpgraded } from '../src/migrations/config-migrator.js';
+import { buildLocalnestPaths } from '../src/home-layout.js';
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-migrator-test-'));
@@ -32,7 +33,8 @@ test('ensureConfigUpgraded handles missing/invalid config', () => {
 
 test('ensureConfigUpgraded migrates old config and creates backup', () => {
   const root = makeTempDir();
-  const cfgPath = path.join(root, 'localnest.config.json');
+  const cfgPath = buildLocalnestPaths(root).configPath;
+  fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
   fs.writeFileSync(
     cfgPath,
     JSON.stringify({ version: 1, roots: [{ label: 'x', path: root }] }, null, 2),
@@ -49,6 +51,7 @@ test('ensureConfigUpgraded migrates old config and creates backup', () => {
   assert.equal(upgraded.version, 3);
   assert.equal(upgraded.index.backend, 'sqlite-vec');
   assert.equal(upgraded.index.maxIndexedFiles, 20000);
+  assert.equal(upgraded.index.dbPath, buildLocalnestPaths(root).sqliteDbPath);
   assert.equal(upgraded.memory.enabled, false);
   assert.equal(upgraded.memory.backend, 'auto');
   assert.equal(upgraded.memory.autoCapture, false);
@@ -58,7 +61,8 @@ test('ensureConfigUpgraded migrates old config and creates backup', () => {
 
 test('ensureConfigUpgraded returns up-to-date without rewrite', () => {
   const root = makeTempDir();
-  const cfgPath = path.join(root, 'localnest.config.json');
+  const cfgPath = buildLocalnestPaths(root).configPath;
+  fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
   const data = {
     version: 3,
     roots: [{ label: 'x', path: root }],

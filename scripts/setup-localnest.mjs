@@ -6,18 +6,20 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { buildLocalnestPaths, migrateLocalnestHomeLayout, resolveLocalnestHome } from '../src/home-layout.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
 }
 
 const cwd = process.cwd();
-const localnestHome = path.resolve(process.env.LOCALNEST_HOME || path.join(os.homedir(), '.localnest'));
-const configPath = path.join(localnestHome, 'localnest.config.json');
-const snippetPath = path.join(localnestHome, 'mcp.localnest.json');
-const defaultDbPath = path.join(localnestHome, 'localnest.db');
-const defaultJsonIndexPath = path.join(localnestHome, 'localnest.index.json');
-const defaultMemoryDbPath = path.join(localnestHome, 'localnest.memory.db');
+const localnestHome = resolveLocalnestHome(process.env);
+const layout = migrateLocalnestHomeLayout(localnestHome).paths;
+const configPath = layout.configPath;
+const snippetPath = layout.snippetPath;
+const defaultDbPath = layout.sqliteDbPath;
+const defaultJsonIndexPath = layout.jsonIndexPath;
+const defaultMemoryDbPath = layout.memoryDbPath;
 const argv = process.argv.slice(2);
 
 function isDir(p) {
@@ -163,7 +165,10 @@ function parseRootsFromPathsArg(pathsArg) {
 }
 
 function saveOutputs(roots, packageRef, indexConfig) {
-  fs.mkdirSync(localnestHome, { recursive: true });
+  fs.mkdirSync(layout.dirs.config, { recursive: true });
+  fs.mkdirSync(layout.dirs.data, { recursive: true });
+  fs.mkdirSync(layout.dirs.cache, { recursive: true });
+  fs.mkdirSync(layout.dirs.backups, { recursive: true });
   const config = {
     name: 'localnest',
     version: 3,

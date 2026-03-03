@@ -42,6 +42,7 @@
   <div className="docPanel">
     <h3>Memory</h3>
     <ul>
+      <li>`localnest_task_context`</li>
       <li>`localnest_memory_status`</li>
       <li>`localnest_memory_recall`</li>
       <li>`localnest_memory_list`</li>
@@ -49,6 +50,7 @@
       <li>`localnest_memory_store`</li>
       <li>`localnest_memory_update`</li>
       <li>`localnest_memory_delete`</li>
+      <li>`localnest_capture_outcome`</li>
       <li>`localnest_memory_capture_event`</li>
       <li>`localnest_memory_events`</li>
     </ul>
@@ -72,7 +74,7 @@ Tools support `response_format: "json"` or `"markdown"`.
     <span>1</span>
     <div>
       <strong>Check runtime state</strong>
-      <p>`localnest_server_status`, `localnest_memory_status`, and `localnest_update_status` confirm active backend, memory state, and version state.</p>
+      <p>`localnest_server_status`, `localnest_task_context`, and `localnest_update_status` confirm active backend, memory state, relevant recall, and version state.</p>
     </div>
   </div>
   <div className="docStep">
@@ -86,7 +88,7 @@ Tools support `response_format: "json"` or `"markdown"`.
     <span>3</span>
     <div>
       <strong>Recall prior context</strong>
-      <p>If memory is enabled, run `localnest_memory_recall` before indexing or deep analysis.</p>
+      <p>If memory is enabled, prefer `localnest_task_context` before indexing or deep analysis.</p>
     </div>
   </div>
   <div className="docStep">
@@ -107,7 +109,7 @@ Tools support `response_format: "json"` or `"markdown"`.
     <span>6</span>
     <div>
       <strong>Capture durable outcomes</strong>
-      <p>After a fix, decision, review, or preference discovery, emit `localnest_memory_capture_event` when memory is enabled.</p>
+      <p>After a fix, decision, review, or preference discovery, emit `localnest_capture_outcome` when memory is enabled.</p>
     </div>
   </div>
 </div>

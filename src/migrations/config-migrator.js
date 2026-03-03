@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { buildLocalnestPaths } from '../home-layout.js';
 
-function backupFile(configPath) {
+function backupFile(configPath, localnestHome) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = `${configPath}.bak.${stamp}`;
+  const backupDir = buildLocalnestPaths(localnestHome).dirs.backups;
+  fs.mkdirSync(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, `${path.basename(configPath)}.bak.${stamp}`);
   fs.copyFileSync(configPath, backupPath);
   return backupPath;
 }
@@ -15,10 +18,11 @@ function safeWriteJson(filePath, value) {
 }
 
 function defaultIndex(localnestHome) {
+  const layout = buildLocalnestPaths(localnestHome);
   return {
     backend: 'sqlite-vec',
-    dbPath: path.join(localnestHome, 'localnest.db'),
-    indexPath: path.join(localnestHome, 'localnest.index.json'),
+    dbPath: layout.sqliteDbPath,
+    indexPath: layout.jsonIndexPath,
     chunkLines: 60,
     chunkOverlap: 15,
     maxTermsPerChunk: 80,
@@ -27,10 +31,11 @@ function defaultIndex(localnestHome) {
 }
 
 function defaultMemory(localnestHome) {
+  const layout = buildLocalnestPaths(localnestHome);
   return {
     enabled: false,
     backend: 'auto',
-    dbPath: path.join(localnestHome, 'localnest.memory.db'),
+    dbPath: layout.memoryDbPath,
     autoCapture: false,
     askForConsentDone: false
   };
@@ -95,7 +100,7 @@ export function ensureConfigUpgraded({ configPath, localnestHome }) {
     return { changed: false, reason: 'up-to-date', version: parsed.version };
   }
 
-  const backupPath = backupFile(configPath);
+  const backupPath = backupFile(configPath, localnestHome);
   safeWriteJson(configPath, parsed);
   return {
     changed: true,
