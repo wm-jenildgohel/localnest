@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { resolveConfigPath as resolveDefaultConfigPath, resolveLocalnestHome } from '../src/home-layout.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -31,11 +31,10 @@ function getNpxCommand() {
 }
 
 function resolveConfigPath() {
-  if (process.env.LOCALNEST_CONFIG) {
-    return path.resolve(process.env.LOCALNEST_CONFIG);
-  }
-  const home = path.resolve(process.env.LOCALNEST_HOME || path.join(os.homedir(), '.localnest'));
-  return path.join(home, 'localnest.config.json');
+  return resolveDefaultConfigPath({
+    env: process.env,
+    localnestHome: resolveLocalnestHome(process.env)
+  });
 }
 
 function resolveIndexBackend() {

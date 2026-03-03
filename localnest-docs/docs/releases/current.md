@@ -1,22 +1,22 @@
-# Current Release
+# Current Branch
 
-Current npm release: `0.0.3`
+Current branch package: `0.0.4-beta.3`
 
 <div className="docGrid docGrid--3">
   <div className="docPanel">
     <span className="docEyebrow">Channel</span>
-    <h3>Stable</h3>
-    <p>Use this page when you need docs that match the published npm package.</p>
+    <h3>Beta branch</h3>
+    <p>Use this page when you need docs that match the current `feature/memory-efficiency` source behavior.</p>
   </div>
   <div className="docPanel">
     <span className="docEyebrow">Package</span>
-    <h3>`localnest-mcp@0.0.3`</h3>
-    <p>The current stable release line documented in this repo.</p>
+    <h3>`localnest-mcp@0.0.4-beta.3`</h3>
+    <p>The branch package/runtime version defined in repository source.</p>
   </div>
   <div className="docPanel">
     <span className="docEyebrow">Docs contract</span>
-    <h3>Canonical `localnest_*` tools</h3>
-    <p>Stable docs describe the canonical tool surface only.</p>
+    <h3>Retrieval + memory workflow</h3>
+    <p>Current branch docs include the full memory tool surface and setup/config changes.</p>
   </div>
 </div>
 
@@ -24,18 +24,20 @@ Current npm release: `0.0.3`
 
 - canonical `localnest_*` tool names
 - lexical, semantic, and hybrid retrieval
+- opt-in local memory tools plus high-level task-context and capture-outcome workflow
 - bundled install skill command
-- static setup and doctor workflow
+- version-aware skill sync behavior
+- setup-time memory consent and config migration
 
 ## How to use this page
 
-- Treat this page as the source of truth for published npm behavior.
-- Compare against archived version docs if you are supporting older installs.
+- Treat this page as the source of truth for the current branch behavior.
+- Use the archived `0.0.3` pages when you need the last stable release contract.
 
 ## Version Source
 
-This release mapping is based on the current root package version and the maintained changelog in the repository.
+This page is based on the current branch package version and maintained changelog in the repository.
 
-- package version: `0.0.3`
-- changelog entry present for `0.0.3`
-- local git tags do **not** currently match this release line
+- package version: `0.0.4-beta.3`
+- changelog `Unreleased` section documents the memory and setup changes present on this branch
+- stable published release docs remain archived under `0.0.3`

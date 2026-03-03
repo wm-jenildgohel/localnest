@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { buildLocalnestPaths } from '../home-layout.js';
 
-function backupFile(configPath) {
+function backupFile(configPath, localnestHome) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = `${configPath}.bak.${stamp}`;
+  const backupDir = buildLocalnestPaths(localnestHome).dirs.backups;
+  fs.mkdirSync(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, `${path.basename(configPath)}.bak.${stamp}`);
   fs.copyFileSync(configPath, backupPath);
   return backupPath;
 }
@@ -15,14 +18,26 @@ function safeWriteJson(filePath, value) {
 }
 
 function defaultIndex(localnestHome) {
+  const layout = buildLocalnestPaths(localnestHome);
   return {
     backend: 'sqlite-vec',
-    dbPath: path.join(localnestHome, 'localnest.db'),
-    indexPath: path.join(localnestHome, 'localnest.index.json'),
+    dbPath: layout.sqliteDbPath,
+    indexPath: layout.jsonIndexPath,
     chunkLines: 60,
     chunkOverlap: 15,
     maxTermsPerChunk: 80,
     maxIndexedFiles: 20000
+  };
+}
+
+function defaultMemory(localnestHome) {
+  const layout = buildLocalnestPaths(localnestHome);
+  return {
+    enabled: false,
+    backend: 'auto',
+    dbPath: layout.memoryDbPath,
+    autoCapture: false,
+    askForConsentDone: false
   };
 }
 
@@ -63,11 +78,29 @@ export function ensureConfigUpgraded({ configPath, localnestHome }) {
     }
   }
 
+  if (currentVersion < 3) {
+    parsed.version = 3;
+    changed = true;
+  }
+
+  if (!parsed.memory || typeof parsed.memory !== 'object') {
+    parsed.memory = defaultMemory(localnestHome);
+    changed = true;
+  } else {
+    const defaults = defaultMemory(localnestHome);
+    for (const [k, v] of Object.entries(defaults)) {
+      if (parsed.memory[k] === undefined || parsed.memory[k] === null || parsed.memory[k] === '') {
+        parsed.memory[k] = v;
+        changed = true;
+      }
+    }
+  }
+
   if (!changed) {
     return { changed: false, reason: 'up-to-date', version: parsed.version };
   }
 
-  const backupPath = backupFile(configPath);
+  const backupPath = backupFile(configPath, localnestHome);
   safeWriteJson(configPath, parsed);
   return {
     changed: true,

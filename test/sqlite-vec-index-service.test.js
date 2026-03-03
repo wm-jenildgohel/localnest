@@ -83,3 +83,36 @@ test('sqlite index updates df/norm incrementally across reindex', { skip: skipRe
 
   fs.rmSync(tempRoot, { recursive: true, force: true });
 });
+
+test('sqlite index status reports extension as not configured when no extension path is provided', { skip: skipReason }, () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-sqlite-status-test-'));
+  const dbPath = path.join(tempRoot, 'idx.db');
+
+  const workspace = {
+    resolveSearchBases: () => [tempRoot],
+    normalizeTarget: (p) => p,
+    *walkDirectories() {
+      yield { files: [] };
+    },
+    isLikelyTextFile: () => true,
+    safeReadText: () => ''
+  };
+
+  const service = new SqliteVecIndexService({
+    workspace,
+    dbPath,
+    sqliteVecExtensionPath: '',
+    chunkLines: 20,
+    chunkOverlap: 5,
+    maxTermsPerChunk: 40,
+    maxIndexedFiles: 100
+  });
+
+  const status = service.getStatus();
+  assert.equal(status.sqlite_vec_loaded, null);
+  assert.equal(status.sqlite_vec_extension.configured, false);
+  assert.equal(status.sqlite_vec_extension.attempted, false);
+  assert.equal(status.sqlite_vec_extension.status, 'not-configured');
+
+  fs.rmSync(tempRoot, { recursive: true, force: true });
+});

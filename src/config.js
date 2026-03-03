@@ -1,8 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { ensureConfigUpgraded } from './migrations/config-migrator.js';
+import {
+  migrateLocalnestHomeLayout,
+  resolveConfigPath as resolveDefaultConfigPath,
+  resolveLocalnestHome
+} from './home-layout.js';
 
 function parseBoolean(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -25,7 +29,7 @@ function parseStringEnv(value, fallback) {
 }
 
 export const SERVER_NAME = 'localnest';
-export const SERVER_VERSION = '0.0.3';
+export const SERVER_VERSION = '0.0.4-beta.3';
 
 export const DEFAULT_MAX_READ_LINES = 400;
 export const DEFAULT_MAX_RESULTS = 100;
@@ -182,19 +186,26 @@ function parseConfigFileSettings(configPath) {
   }
 
   if (!parsed || typeof parsed !== 'object') return {};
-  if (!parsed.index || typeof parsed.index !== 'object') return {};
+
+  const index = parsed.index && typeof parsed.index === 'object' ? parsed.index : {};
+  const memory = parsed.memory && typeof parsed.memory === 'object' ? parsed.memory : {};
 
   return {
-    backend: typeof parsed.index.backend === 'string' ? parsed.index.backend : undefined,
-    dbPath: typeof parsed.index.dbPath === 'string' ? parsed.index.dbPath : undefined,
-    indexPath: typeof parsed.index.indexPath === 'string' ? parsed.index.indexPath : undefined,
-    chunkLines: Number.isFinite(parsed.index.chunkLines) ? parsed.index.chunkLines : undefined,
-    chunkOverlap: Number.isFinite(parsed.index.chunkOverlap) ? parsed.index.chunkOverlap : undefined,
-    maxTermsPerChunk: Number.isFinite(parsed.index.maxTermsPerChunk) ? parsed.index.maxTermsPerChunk : undefined,
-    maxIndexedFiles: Number.isFinite(parsed.index.maxIndexedFiles) ? parsed.index.maxIndexedFiles : undefined,
-    sqliteVecExtensionPath: typeof parsed.index.sqliteVecExtensionPath === 'string'
-      ? parsed.index.sqliteVecExtensionPath
-      : undefined
+    backend: typeof index.backend === 'string' ? index.backend : undefined,
+    dbPath: typeof index.dbPath === 'string' ? index.dbPath : undefined,
+    indexPath: typeof index.indexPath === 'string' ? index.indexPath : undefined,
+    chunkLines: Number.isFinite(index.chunkLines) ? index.chunkLines : undefined,
+    chunkOverlap: Number.isFinite(index.chunkOverlap) ? index.chunkOverlap : undefined,
+    maxTermsPerChunk: Number.isFinite(index.maxTermsPerChunk) ? index.maxTermsPerChunk : undefined,
+    maxIndexedFiles: Number.isFinite(index.maxIndexedFiles) ? index.maxIndexedFiles : undefined,
+    sqliteVecExtensionPath: typeof index.sqliteVecExtensionPath === 'string'
+      ? index.sqliteVecExtensionPath
+      : undefined,
+    memoryEnabled: typeof memory.enabled === 'boolean' ? memory.enabled : undefined,
+    memoryBackend: typeof memory.backend === 'string' ? memory.backend : undefined,
+    memoryDbPath: typeof memory.dbPath === 'string' ? memory.dbPath : undefined,
+    memoryAutoCapture: typeof memory.autoCapture === 'boolean' ? memory.autoCapture : undefined,
+    memoryConsentDone: typeof memory.askForConsentDone === 'boolean' ? memory.askForConsentDone : undefined
   };
 }
 
@@ -219,8 +230,9 @@ function detectRipgrep() {
 }
 
 export function buildRuntimeConfig(env = process.env) {
-  const localnestHome = path.resolve(env.LOCALNEST_HOME || path.join(os.homedir(), '.localnest'));
-  const configPath = env.LOCALNEST_CONFIG || 'localnest.config.json';
+  const localnestHome = resolveLocalnestHome(env);
+  const layout = migrateLocalnestHomeLayout(localnestHome).paths;
+  const configPath = resolveDefaultConfigPath({ env, localnestHome });
   const migration = ensureConfigUpgraded({
     configPath: path.resolve(configPath),
     localnestHome
@@ -241,10 +253,10 @@ export function buildRuntimeConfig(env = process.env) {
     forceSplitChildren: parseBoolean(env.LOCALNEST_FORCE_SPLIT_CHILDREN, false),
     indexBackend: parseStringEnv(env.LOCALNEST_INDEX_BACKEND, fileSettings.backend || 'sqlite-vec'),
     vectorIndexPath: path.resolve(
-      env.LOCALNEST_INDEX_PATH || fileSettings.indexPath || path.join(localnestHome, 'localnest.index.json')
+      env.LOCALNEST_INDEX_PATH || fileSettings.indexPath || layout.jsonIndexPath
     ),
     sqliteDbPath: path.resolve(
-      env.LOCALNEST_DB_PATH || fileSettings.dbPath || path.join(localnestHome, 'localnest.db')
+      env.LOCALNEST_DB_PATH || fileSettings.dbPath || layout.sqliteDbPath
     ),
     sqliteVecExtensionPath: parseStringEnv(
       env.LOCALNEST_SQLITE_VEC_EXTENSION,
@@ -285,6 +297,13 @@ export function buildRuntimeConfig(env = process.env) {
         .map((x) => x.trim())
         .filter(Boolean)
     ),
+    memoryEnabled: parseBoolean(env.LOCALNEST_MEMORY_ENABLED, fileSettings.memoryEnabled || false),
+    memoryBackend: parseStringEnv(env.LOCALNEST_MEMORY_BACKEND, fileSettings.memoryBackend || 'auto'),
+    memoryDbPath: path.resolve(
+      env.LOCALNEST_MEMORY_DB_PATH || fileSettings.memoryDbPath || layout.memoryDbPath
+    ),
+    memoryAutoCapture: parseBoolean(env.LOCALNEST_MEMORY_AUTO_CAPTURE, fileSettings.memoryAutoCapture || false),
+    memoryConsentDone: parseBoolean(env.LOCALNEST_MEMORY_CONSENT_DONE, fileSettings.memoryConsentDone || false),
     roots: resolveRoots({
       projectRoots: env.PROJECT_ROOTS,
       localnestConfigPath: configPath

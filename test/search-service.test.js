@@ -39,6 +39,7 @@ test('searchHybrid merges semantic and lexical overlap into hybrid result', () =
 
   assert.equal(out.results[0].file, '/tmp/a.js');
   assert.equal(out.results[0].type, 'hybrid');
+  assert.equal(out.ranking_mode, 'hybrid');
   assert.equal(out.results[0].line, 11);
   assert.equal(out.results[0].start_line, 9);
   assert.equal(out.results[0].end_line, 15);
@@ -92,6 +93,7 @@ test('searchHybrid auto-indexes once when semantic results are empty', () => {
   assert.equal(calls.index, 1);
   assert.equal(calls.semantic, 2);
   assert.equal(first.semantic_hits, 1);
+  assert.equal(first.ranking_mode, 'semantic-only');
   assert.equal(first.auto_index?.attempted, true);
   assert.equal(first.auto_index?.success, true);
 
@@ -142,5 +144,122 @@ test('searchHybrid does not auto-index when autoIndex is false', () => {
   });
 
   assert.equal(out.semantic_hits, 0);
+  assert.equal(out.ranking_mode, 'none');
   assert.equal(out.auto_index, null);
+});
+
+test('searchHybrid reports lexical-only ranking mode when semantic results are absent', () => {
+  const service = new SearchService({
+    workspace: {},
+    ignoreDirs: new Set(),
+    hasRipgrep: false,
+    rgTimeoutMs: 1000,
+    maxFileBytes: 1024,
+    vectorIndex: {
+      semanticSearch: () => []
+    }
+  });
+
+  service.searchCode = () => ([
+    { file: '/tmp/a.js', line: 5, text: 'alpha();' }
+  ]);
+
+  const out = service.searchHybrid({
+    query: 'alpha',
+    projectPath: '/tmp',
+    allRoots: false,
+    glob: '*',
+    maxResults: 10,
+    caseSensitive: false,
+    minSemanticScore: 0,
+    autoIndex: false
+  });
+
+  assert.equal(out.ranking_mode, 'lexical-only');
+  assert.equal(out.results[0].type, 'lexical');
+});
+
+test('searchHybrid downranks lexical-only noise for generic short queries', () => {
+  const service = new SearchService({
+    workspace: {},
+    ignoreDirs: new Set(),
+    hasRipgrep: false,
+    rgTimeoutMs: 1000,
+    maxFileBytes: 1024,
+    vectorIndex: {
+      semanticSearch: () => ([
+        {
+          file: '/tmp/docs/search.md',
+          start_line: 1,
+          end_line: 5,
+          snippet: 'Search overview',
+          semantic_score: 0.25
+        }
+      ])
+    }
+  });
+
+  service.searchCode = () => ([
+    { file: '/tmp/SECURITY.md', line: 8, text: 'Install ripgrep for search' }
+  ]);
+
+  const out = service.searchHybrid({
+    query: 'search',
+    projectPath: '/tmp',
+    allRoots: false,
+    glob: '*',
+    maxResults: 10,
+    caseSensitive: false,
+    minSemanticScore: 0,
+    autoIndex: false
+  });
+
+  assert.equal(out.ranking_mode, 'hybrid');
+  assert.equal(out.results[0].file, '/tmp/docs/search.md');
+  assert.equal(out.results[0].type, 'semantic');
+});
+
+test('searchHybrid adds path affinity bias in allRoots mode', () => {
+  const service = new SearchService({
+    workspace: {},
+    ignoreDirs: new Set(),
+    hasRipgrep: false,
+    rgTimeoutMs: 1000,
+    maxFileBytes: 1024,
+    vectorIndex: {
+      semanticSearch: () => ([
+        {
+          file: '/tmp/other/android/HybridClassBase.java',
+          start_line: 1,
+          end_line: 8,
+          snippet: 'hybrid base',
+          semantic_score: 0.42
+        },
+        {
+          file: '/tmp/localnest/src/search-service.js',
+          start_line: 10,
+          end_line: 20,
+          snippet: 'RRF scoring in LocalNest',
+          semantic_score: 0.4
+        }
+      ])
+    }
+  });
+
+  service.searchCode = () => [];
+
+  const out = service.searchHybrid({
+    query: 'localnest hybrid search RRF scoring',
+    projectPath: undefined,
+    allRoots: true,
+    glob: '*',
+    maxResults: 10,
+    caseSensitive: false,
+    minSemanticScore: 0,
+    autoIndex: false
+  });
+
+  assert.equal(out.ranking_mode, 'semantic-only');
+  assert.equal(out.results[0].file, '/tmp/localnest/src/search-service.js');
+  assert.ok(out.results[0].path_affinity > out.results[1].path_affinity);
 });

@@ -61,6 +61,8 @@ export class SqliteVecIndexService {
     this.maxIndexedFiles = maxIndexedFiles;
     this.db = null;
     this.sqliteVecLoaded = false;
+    this.sqliteVecLoadAttempted = false;
+    this.sqliteVecLoadError = '';
   }
 
   ensureDb() {
@@ -136,18 +138,57 @@ export class SqliteVecIndexService {
   }
 
   tryLoadSqliteVec() {
-    if (!this.sqliteVecExtensionPath) return;
+    this.sqliteVecLoadAttempted = false;
+    this.sqliteVecLoadError = '';
+    if (!this.sqliteVecExtensionPath) {
+      this.sqliteVecLoaded = false;
+      return;
+    }
     try {
+      this.sqliteVecLoadAttempted = true;
       if (typeof this.db.enableLoadExtension === 'function') {
         this.db.enableLoadExtension(true);
       }
       if (typeof this.db.loadExtension === 'function') {
         this.db.loadExtension(this.sqliteVecExtensionPath);
         this.sqliteVecLoaded = true;
+        this.sqliteVecLoadError = '';
       }
-    } catch {
+    } catch (error) {
       this.sqliteVecLoaded = false;
+      this.sqliteVecLoadError = String(error?.message || error || '');
     }
+  }
+
+  getSqliteVecExtensionStatus() {
+    if (!this.sqliteVecExtensionPath) {
+      return {
+        configured: false,
+        attempted: false,
+        loaded: null,
+        status: 'not-configured',
+        path: ''
+      };
+    }
+
+    if (!this.sqliteVecLoadAttempted) {
+      return {
+        configured: true,
+        attempted: false,
+        loaded: null,
+        status: 'not-attempted',
+        path: this.sqliteVecExtensionPath
+      };
+    }
+
+    return {
+      configured: true,
+      attempted: true,
+      loaded: this.sqliteVecLoaded,
+      status: this.sqliteVecLoaded ? 'loaded' : 'load-failed',
+      path: this.sqliteVecExtensionPath,
+      error: this.sqliteVecLoaded ? '' : this.sqliteVecLoadError
+    };
   }
 
   setMeta(key, value) {
@@ -163,10 +204,12 @@ export class SqliteVecIndexService {
     this.ensureDb();
     const row = this.db.prepare('SELECT COUNT(*) AS c FROM files').get();
     const chunkRow = this.db.prepare('SELECT COUNT(*) AS c FROM chunks').get();
+    const extension = this.getSqliteVecExtensionStatus();
     return {
       backend: 'sqlite-vec',
       db_path: this.dbPath,
-      sqlite_vec_loaded: this.sqliteVecLoaded,
+      sqlite_vec_loaded: extension.loaded,
+      sqlite_vec_extension: extension,
       updated_at: this.getMeta('updated_at'),
       total_files: row?.c || 0,
       total_chunks: chunkRow?.c || 0
@@ -300,7 +343,8 @@ export class SqliteVecIndexService {
       total_files: status.total_files,
       total_chunks: status.total_chunks,
       db_path: this.dbPath,
-      sqlite_vec_loaded: this.sqliteVecLoaded
+      sqlite_vec_loaded: status.sqlite_vec_loaded,
+      sqlite_vec_extension: status.sqlite_vec_extension
     };
   }
 

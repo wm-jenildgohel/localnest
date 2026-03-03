@@ -26,7 +26,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Release Notes',
       items: [
-        { type: 'doc', id: 'releases/current', label: 'Current Stable' },
+        { type: 'doc', id: 'releases/current', label: 'Current Branch' },
         { type: 'doc', id: 'releases/history', label: 'Release Matrix' }
       ],
       collapsed: false

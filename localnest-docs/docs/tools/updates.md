@@ -17,6 +17,11 @@ Updates the package globally and syncs bundled skill files.
 
 This tool must only be used after explicit user approval.
 
+## Related branch behavior
+
+- `localnest-mcp --version` now reports the runtime/package version directly.
+- `localnest-mcp-install-skill` now checks bundled skill metadata and skips reinstalling when the installed skill is already current, unless `--force` is used.
+
 ## Safe usage pattern
 
 <div className="docSteps">
