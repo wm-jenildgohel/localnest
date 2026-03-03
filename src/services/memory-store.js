@@ -22,6 +22,60 @@ function cleanString(value, maxLength = 0) {
   return trimmed.slice(0, maxLength).trim();
 }
 
+function normalizeWhitespace(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function truncateText(value, maxLength) {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized || normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+}
+
+function firstSentence(value, maxLength = 240) {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return '';
+  const sentence = normalized.split(/(?<=[.!?])\s+/)[0] || normalized;
+  return truncateText(sentence.replace(/[.!?]+$/, ''), maxLength);
+}
+
+function looksGenericTitle(value) {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  if (!normalized) return true;
+  if (normalized.length < 10) return true;
+  if (/^(task|update|progress|work|fix|bugfix|review|decision|note|memory|change|done|completed|wip|misc|issue)$/.test(normalized)) {
+    return true;
+  }
+  return /^(looked at|worked on|checked|updated|fixed issue|misc|progress on)\b/.test(normalized);
+}
+
+function humanizeLabel(value) {
+  const cleaned = normalizeWhitespace(String(value || '').replace(/[_-]+/g, ' '));
+  if (!cleaned) return '';
+  return cleaned.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function deriveSummary(summary, content) {
+  const explicit = truncateText(summary, 4000);
+  if (explicit) return explicit;
+  return truncateText(firstSentence(content, 280), 4000);
+}
+
+function deriveTitle({ title, summary, content, eventType, scope }) {
+  const explicit = truncateText(title, 400);
+  if (explicit && !looksGenericTitle(explicit)) return explicit;
+
+  const fromSummary = firstSentence(summary, 120);
+  if (fromSummary && !looksGenericTitle(fromSummary)) return truncateText(fromSummary, 400);
+
+  const fromContent = firstSentence(content, 120);
+  if (fromContent && !looksGenericTitle(fromContent)) return truncateText(fromContent, 400);
+
+  const scopeLabel = humanizeLabel(scope.feature || scope.topic);
+  const eventLabel = humanizeLabel(eventType || 'memory');
+  return truncateText(`${eventLabel}${scopeLabel ? ` for ${scopeLabel}` : ''}`, 400) || 'Project memory';
+}
+
 function ensureArray(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -94,6 +148,14 @@ function buildSearchTerms({ title, summary, content, scope, tags, links, sourceR
     normalizeLinks(links).map((item) => `${item.label || ''} ${item.path}`).join(' '),
     sourceRef
   ].join('\n')))).slice(0, 200);
+}
+
+function hasStrongMemorySignal(text) {
+  return /fix|resolved|decided|remember|always|never|prefer|constraint|important|must|should/.test(text);
+}
+
+function looksExploratory(text) {
+  return /explor|looked at|opened files|read files|investigat|inspect|understand layout|browsed|scanned/.test(text);
 }
 
 function scoreTokenOverlap(queryTerms, candidateTerms) {
@@ -488,9 +550,15 @@ export class MemoryStore {
     await this.init();
     const scope = normalizeScope(input.scope);
     const kind = cleanString(input.kind || 'knowledge', 40) || 'knowledge';
-    const title = cleanString(input.title, 400);
-    const summary = cleanString(input.summary, 4000);
     const content = cleanString(input.content, 20000);
+    const summary = deriveSummary(input.summary, content);
+    const title = deriveTitle({
+      title: input.title,
+      summary,
+      content,
+      eventType: input.event_type || input.kind,
+      scope
+    });
     const status = cleanString(input.status || 'active', 30) || 'active';
     const tags = ensureArray(input.tags);
     const links = normalizeLinks(input.links);
@@ -834,9 +902,16 @@ export class MemoryStore {
     await this.init();
     const scope = normalizeScope(input.scope);
     const eventType = cleanString(input.event_type || input.eventType || 'task', 60) || 'task';
-    const title = cleanString(input.title, 400);
-    const summary = cleanString(input.summary, 4000);
-    const content = cleanString(input.content, 20000);
+    const rawContent = cleanString(input.content, 20000);
+    const summary = deriveSummary(input.summary, rawContent);
+    const content = rawContent || summary;
+    const title = deriveTitle({
+      title: input.title,
+      summary,
+      content,
+      eventType,
+      scope
+    });
     const tags = ensureArray(input.tags);
     const links = normalizeLinks(input.links);
     const sourceRef = cleanString(input.source_ref || input.sourceRef, 1000);
@@ -848,8 +923,16 @@ export class MemoryStore {
       filesChanged: input.files_changed || input.filesChanged,
       hasTests: input.has_tests || input.hasTests,
       tags,
+      title,
       content,
       summary
+    });
+    const promotionThreshold = this.getPromotionThreshold({
+      eventType,
+      status: input.status,
+      title,
+      summary,
+      content
     });
 
     if (!title) throw new Error('title is required');
@@ -865,11 +948,11 @@ export class MemoryStore {
       links,
       sourceRef,
       signalScore,
-      status: signalScore >= 3 ? 'processed' : 'ignored'
+      status: signalScore >= promotionThreshold ? 'processed' : 'ignored'
     };
 
     let promotedMemoryId = null;
-    if (signalScore >= 3) {
+    if (signalScore >= promotionThreshold) {
       const memoryKind = input.kind || (eventType === 'preference' ? 'preference' : 'knowledge');
       const mergeTarget = await this.findMergeCandidate({
         kind: memoryKind,
@@ -953,6 +1036,7 @@ export class MemoryStore {
       event_id: insert.lastInsertRowid,
       event_type: eventType,
       signal_score: Number(signalScore.toFixed(2)),
+      promotion_threshold: Number(promotionThreshold.toFixed(2)),
       status: record.status,
       promoted_memory_id: promotedMemoryId
     };
@@ -1011,23 +1095,43 @@ export class MemoryStore {
     filesChanged,
     hasTests,
     tags,
+    title,
     content,
     summary
   }) {
     let score = 0;
     const normalizedType = String(eventType || '').toLowerCase();
     const normalizedStatus = String(status || '').toLowerCase();
-    const text = `${summary || ''}\n${content || ''}`.toLowerCase();
+    const text = `${title || ''}\n${summary || ''}\n${content || ''}`.toLowerCase();
 
     if (['bugfix', 'decision', 'review', 'preference'].includes(normalizedType)) score += 2;
     if (['completed', 'resolved', 'merged'].includes(normalizedStatus)) score += 1.5;
+    if (normalizedType === 'task' && ['completed', 'resolved', 'merged'].includes(normalizedStatus)) score += 0.75;
     if (Number.isFinite(Number(importance))) score += Math.min(2, Number(importance) / 50);
     if (Number.isFinite(Number(filesChanged)) && Number(filesChanged) > 0) score += Math.min(1.5, Number(filesChanged) * 0.2);
     if (hasTests) score += 0.75;
     if ((tags || []).length > 0) score += Math.min(1, (tags || []).length * 0.2);
-    if (/fix|resolved|decided|remember|always|never|prefer|constraint|important/.test(text)) score += 1;
+    if (hasStrongMemorySignal(text)) score += 1;
+    if (looksExploratory(text) && !hasStrongMemorySignal(text)) score -= 1.5;
 
-    return score;
+    return Math.max(0, score);
+  }
+
+  getPromotionThreshold({ eventType, status, title, summary, content }) {
+    const normalizedType = String(eventType || '').toLowerCase();
+    const normalizedStatus = String(status || '').toLowerCase();
+    const text = `${title || ''}\n${summary || ''}\n${content || ''}`.toLowerCase();
+
+    let threshold = 3;
+    if (['preference', 'decision'].includes(normalizedType)) threshold = 2.25;
+    else if (['bugfix', 'review'].includes(normalizedType)) threshold = 2.5;
+    else if (normalizedType === 'task' && ['completed', 'resolved', 'merged'].includes(normalizedStatus)) threshold = 2.75;
+
+    if (looksExploratory(text) && !hasStrongMemorySignal(text)) {
+      threshold += 0.75;
+    }
+
+    return threshold;
   }
 
   async findMergeCandidate({ kind, title, summary, content, scope, tags }) {

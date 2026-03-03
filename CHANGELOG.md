@@ -45,7 +45,7 @@ All notable changes to this project will be documented in this file.
   - install failure and skill-sync failure branches
 
 ### Changed
-- Package/runtime version bumped to `0.0.4-beta`.
+- Package/runtime version bumped to `0.0.4-beta.2`.
 - Bundled skill install now checks installed skill metadata and only resyncs when the installed skill is missing, outdated, or `--force` is used.
 - `localnest-mcp-setup` now asks for one-time user consent before enabling local memory and persists memory config into `localnest.config.json` and generated MCP snippets.
 - README, bundled `SKILL.md`, and OpenAI agent manifest now document retrieval + memory flow, including pre-task recall and post-task capture guidance.

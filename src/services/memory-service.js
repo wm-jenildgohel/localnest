@@ -131,9 +131,6 @@ export class MemoryService {
 
   async captureEvent(input = {}) {
     this.assertEnabled();
-    if (!this.autoCapture) {
-      throw new Error('Automatic memory capture is disabled. Re-run localnest-mcp-setup and enable memory capture.');
-    }
     return this.store.captureEvent(input);
   }
 

@@ -18,7 +18,7 @@ The local git tags currently available in this repository are:
 
 Those do **not** match the package/changelog release line currently documented here:
 
-- `0.0.4-beta` (current branch package)
+- `0.0.4-beta.2` (current branch package)
 - `0.0.1-beta.1`
 - `0.0.2-beta.2`
 - `0.0.2-beta.3`
@@ -28,7 +28,7 @@ Those do **not** match the package/changelog release line currently documented h
 
 | Version | Basis | Page |
 | --- | --- | --- |
-| `0.0.4-beta` | current branch package + changelog `Unreleased` | [Current Branch](./current) |
+| `0.0.4-beta.2` | current branch package + changelog `Unreleased` | [Current Branch](./current) |
 | `0.0.3` | package version + changelog | [0.0.3](./0.0.3) |
 | `0.0.2-beta.3` | changelog | [0.0.2-beta.3](./0.0.2-beta.3) |
 | `0.0.2-beta.2` | changelog | [0.0.2-beta.2](./0.0.2-beta.2) |

@@ -1,6 +1,6 @@
 # Current Branch
 
-Current branch package: `0.0.4-beta`
+Current branch package: `0.0.4-beta.2`
 
 <div className="docGrid docGrid--3">
   <div className="docPanel">
@@ -10,7 +10,7 @@ Current branch package: `0.0.4-beta`
   </div>
   <div className="docPanel">
     <span className="docEyebrow">Package</span>
-    <h3>`localnest-mcp@0.0.4-beta`</h3>
+    <h3>`localnest-mcp@0.0.4-beta.2`</h3>
     <p>The branch package/runtime version defined in repository source.</p>
   </div>
   <div className="docPanel">
@@ -38,6 +38,6 @@ Current branch package: `0.0.4-beta`
 
 This page is based on the current branch package version and maintained changelog in the repository.
 
-- package version: `0.0.4-beta`
+- package version: `0.0.4-beta.2`
 - changelog `Unreleased` section documents the memory and setup changes present on this branch
 - stable published release docs remain archived under `0.0.3`

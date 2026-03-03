@@ -236,6 +236,44 @@ test('captureEvent promotes high-signal events and ignores weak ones', async (t)
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('captureEvent promotes completed task work when it contains durable implementation detail', async (t) => {
+  if (!await hasSupportedBackend()) {
+    t.skip('No supported sqlite backend available for memory store test');
+    return;
+  }
+
+  const root = makeTempDir();
+  const store = new MemoryStore({
+    enabled: true,
+    backend: 'auto',
+    dbPath: path.join(root, 'memory.db')
+  });
+
+  const captured = await store.captureEvent({
+    event_type: 'task',
+    status: 'completed',
+    title: 'Worked on auth flow',
+    summary: 'Remember to serialize token refresh requests in the auth gateway',
+    content: 'Implemented queueing so duplicate refresh requests wait and retry once after refresh completes.',
+    files_changed: 2,
+    has_tests: false,
+    tags: ['auth', 'jwt'],
+    scope: {
+      project_path: '/repo/app',
+      topic: 'auth'
+    }
+  });
+
+  assert.equal(captured.status, 'promoted');
+  assert.ok(captured.promoted_memory_id);
+
+  const memory = await store.getEntry(captured.promoted_memory_id);
+  assert.equal(memory.title.includes('auth flow'), false);
+  assert.equal(memory.summary.includes('serialize token refresh requests'), true);
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('captureEvent merges into an existing related memory instead of duplicating it', async (t) => {
   if (!await hasSupportedBackend()) {
     t.skip('No supported sqlite backend available for memory store test');

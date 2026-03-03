@@ -1,4 +1,4 @@
 interface:
   display_name: "LocalNest MCP"
-  short_description: "Install and use LocalNest MCP retrieval and memory tools"
-  default_prompt: "Set up LocalNest MCP and run the recommended localnest_* retrieval workflow, including memory status/recall before substantive work and memory capture after meaningful work."
+  short_description: "Install and use LocalNest MCP tools for local repo retrieval"
+  default_prompt: "Use LocalNest MCP by intent: search_files for module discovery, search_code for exact strings, search_hybrid for concept lookup, and read_file for confirmation. Use memory tools only when memory is enabled and the task is substantive."
