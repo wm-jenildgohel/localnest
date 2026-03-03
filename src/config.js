@@ -3,7 +3,6 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ensureConfigUpgraded } from './migrations/config-migrator.js';
 import {
-  buildLocalnestPaths,
   migrateLocalnestHomeLayout,
   resolveConfigPath as resolveDefaultConfigPath,
   resolveLocalnestHome

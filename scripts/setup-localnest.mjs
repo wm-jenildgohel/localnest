@@ -6,7 +6,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { buildLocalnestPaths, migrateLocalnestHomeLayout, resolveLocalnestHome } from '../src/home-layout.js';
+import { migrateLocalnestHomeLayout, resolveLocalnestHome } from '../src/home-layout.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
