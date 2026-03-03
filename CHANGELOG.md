@@ -40,15 +40,21 @@ All notable changes to this project will be documented in this file.
   - memory dedupe behavior
   - memory event promotion vs ignored-event behavior
   - config/runtime memory settings and migration coverage
+  - hybrid search ranking mode metadata
+  - sqlite backend status reporting when no native extension is configured
   - update interval clamping in runtime config
   - self-update dry-run behavior
   - install failure and skill-sync failure branches
+- `npm run stress:localnest` synthetic stress runner for search + memory behavior checks.
 
 ### Changed
-- Package/runtime version bumped to `0.0.4-beta.2`.
+- Package/runtime version bumped to `0.0.4-beta.3`.
 - Bundled skill install now checks installed skill metadata and only resyncs when the installed skill is missing, outdated, or `--force` is used.
 - `localnest-mcp-setup` now asks for one-time user consent before enabling local memory and persists memory config into `localnest.config.json` and generated MCP snippets.
 - README, bundled `SKILL.md`, and OpenAI agent manifest now document retrieval + memory flow, including pre-task recall and post-task capture guidance.
+- `localnest_search_hybrid` now reports `ranking_mode` so callers can tell whether results are hybrid, semantic-only, lexical-only, or empty.
+- Memory recall responses now expose normalized `score` plus `raw_score` for easier interpretation.
+- sqlite backend status now reports extension state precisely (`not-configured`, `not-attempted`, `loaded`, `load-failed`) instead of implying failure when no extension path is set.
 - `localnest_server_status` now includes structured `updates` metadata so agents can prompt users proactively when a newer version is available.
 - `localnest_usage_guide` and bundled `SKILL.md` expanded with explicit update flow, memory workflow guidance, and stronger evidence-first retrieval guidance.
 

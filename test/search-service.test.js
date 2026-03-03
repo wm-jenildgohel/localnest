@@ -39,6 +39,7 @@ test('searchHybrid merges semantic and lexical overlap into hybrid result', () =
 
   assert.equal(out.results[0].file, '/tmp/a.js');
   assert.equal(out.results[0].type, 'hybrid');
+  assert.equal(out.ranking_mode, 'hybrid');
   assert.equal(out.results[0].line, 11);
   assert.equal(out.results[0].start_line, 9);
   assert.equal(out.results[0].end_line, 15);
@@ -92,6 +93,7 @@ test('searchHybrid auto-indexes once when semantic results are empty', () => {
   assert.equal(calls.index, 1);
   assert.equal(calls.semantic, 2);
   assert.equal(first.semantic_hits, 1);
+  assert.equal(first.ranking_mode, 'semantic-only');
   assert.equal(first.auto_index?.attempted, true);
   assert.equal(first.auto_index?.success, true);
 
@@ -142,5 +144,37 @@ test('searchHybrid does not auto-index when autoIndex is false', () => {
   });
 
   assert.equal(out.semantic_hits, 0);
+  assert.equal(out.ranking_mode, 'none');
   assert.equal(out.auto_index, null);
+});
+
+test('searchHybrid reports lexical-only ranking mode when semantic results are absent', () => {
+  const service = new SearchService({
+    workspace: {},
+    ignoreDirs: new Set(),
+    hasRipgrep: false,
+    rgTimeoutMs: 1000,
+    maxFileBytes: 1024,
+    vectorIndex: {
+      semanticSearch: () => []
+    }
+  });
+
+  service.searchCode = () => ([
+    { file: '/tmp/a.js', line: 5, text: 'alpha();' }
+  ]);
+
+  const out = service.searchHybrid({
+    query: 'alpha',
+    projectPath: '/tmp',
+    allRoots: false,
+    glob: '*',
+    maxResults: 10,
+    caseSensitive: false,
+    minSemanticScore: 0,
+    autoIndex: false
+  });
+
+  assert.equal(out.ranking_mode, 'lexical-only');
+  assert.equal(out.results[0].type, 'lexical');
 });

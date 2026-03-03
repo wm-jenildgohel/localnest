@@ -166,7 +166,7 @@ Setup writes two files:
 | `LOCALNEST_INDEX_BACKEND` | `sqlite-vec` | `sqlite-vec` or `json` |
 | `LOCALNEST_DB_PATH` | `~/.localnest/localnest.db` | SQLite database path |
 | `LOCALNEST_INDEX_PATH` | `~/.localnest/localnest.index.json` | JSON index path |
-| `LOCALNEST_SQLITE_VEC_EXTENSION` | — | Custom extension path |
+| `LOCALNEST_SQLITE_VEC_EXTENSION` | — | Optional custom native extension path. If unset, no native extension load is attempted. |
 | `LOCALNEST_VECTOR_CHUNK_LINES` | `60` | Lines per index chunk |
 | `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | Overlap between chunks |
 | `LOCALNEST_VECTOR_MAX_TERMS` | `80` | Max terms per chunk |

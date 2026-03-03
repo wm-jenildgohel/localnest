@@ -1,6 +1,6 @@
 {
   "name": "localnest-mcp",
-  "version": "0.0.4-beta.2",
+  "version": "0.0.4-beta.3",
   "license": "MIT",
   "author": "LocalNest",
   "repository": {
@@ -46,6 +46,7 @@
     "doctor": "node scripts/doctor-localnest.mjs",
     "install:skill": "node scripts/install-localnest-skill.mjs",
     "start": "node src/localnest-mcp.js",
+    "stress:localnest": "node scripts/stress-localnest.mjs",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
     "lint": "eslint . --max-warnings=0",

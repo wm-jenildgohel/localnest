@@ -3,14 +3,14 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "docusaurus start",
-    "build": "docusaurus build",
-    "serve": "docusaurus serve",
-    "swizzle": "docusaurus swizzle",
-    "deploy": "docusaurus deploy",
-    "clear": "docusaurus clear",
-    "write-translations": "docusaurus write-translations",
-    "write-heading-ids": "docusaurus write-heading-ids"
+    "start": "NO_UPDATE_NOTIFIER=1 docusaurus start",
+    "build": "NO_UPDATE_NOTIFIER=1 docusaurus build",
+    "serve": "NO_UPDATE_NOTIFIER=1 docusaurus serve",
+    "swizzle": "NO_UPDATE_NOTIFIER=1 docusaurus swizzle",
+    "deploy": "NO_UPDATE_NOTIFIER=1 docusaurus deploy",
+    "clear": "NO_UPDATE_NOTIFIER=1 docusaurus clear",
+    "write-translations": "NO_UPDATE_NOTIFIER=1 docusaurus write-translations",
+    "write-heading-ids": "NO_UPDATE_NOTIFIER=1 docusaurus write-heading-ids"
   },
   "dependencies": {
     "@docusaurus/core": "latest",

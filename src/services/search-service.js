@@ -420,10 +420,16 @@ export class SearchService {
       .sort((a, b) => b.rrf_score - a.rrf_score)
       .slice(0, maxResults);
 
+    let rankingMode = 'none';
+    if (lexical.length > 0 && semantic.length > 0) rankingMode = 'hybrid';
+    else if (lexical.length > 0) rankingMode = 'lexical-only';
+    else if (semantic.length > 0) rankingMode = 'semantic-only';
+
     return {
       query,
       lexical_hits: lexical.length,
       semantic_hits: semantic.length,
+      ranking_mode: rankingMode,
       auto_index: autoIndexMeta,
       results: fused
     };

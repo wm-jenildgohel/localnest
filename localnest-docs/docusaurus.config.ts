@@ -53,7 +53,7 @@ const config: Config = {
           routeBasePath: '/docs',
           editUrl: 'https://github.com/wmt-mobile/localnest/tree/main/localnest-docs/',
           showLastUpdateAuthor: false,
-          showLastUpdateTime: true,
+          showLastUpdateTime: false,
           sidebarCollapsible: true,
           sidebarCollapsed: false
         },

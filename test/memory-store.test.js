@@ -67,6 +67,8 @@ test('memory store lifecycle: create, list, update, recall, delete', async (t) =
   });
   assert.equal(recalled.count, 1);
   assert.equal(recalled.items[0].memory.id, created.memory.id);
+  assert.equal(recalled.items[0].score > 0 && recalled.items[0].score <= 1, true);
+  assert.equal(recalled.items[0].raw_score >= recalled.items[0].score, true);
 
   const deleted = await store.deleteEntry(created.memory.id);
   assert.equal(deleted.deleted, true);
@@ -133,6 +135,7 @@ test('memory recall ranks scoped relevant memory ahead of weaker matches', async
 
   assert.equal(recalled.count >= 1, true);
   assert.equal(recalled.items[0].memory.id, authFix.memory.id);
+  assert.equal(recalled.items[0].score > 0 && recalled.items[0].score <= 1, true);
 
   fs.rmSync(root, { recursive: true, force: true });
 });

@@ -173,6 +173,13 @@ function textContainsAllTerms(text, terms) {
   return terms.length > 0 && terms.every((term) => haystack.includes(term));
 }
 
+function normalizeRecallScore(rawScore) {
+  const numeric = Number(rawScore);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  // Bound scores to 0..1 so callers can compare relevance more intuitively.
+  return 1 - Math.exp(-numeric / 12);
+}
+
 function scoreScopeMatch(row, scope = {}) {
   let score = 0;
   if (scope.project_path && row.scope_project_path === scope.project_path) score += 3;
@@ -892,7 +899,8 @@ export class MemoryStore {
       query,
       count: ranked.length,
       items: ranked.map((item) => ({
-        score: Number(item.score.toFixed(3)),
+        score: Number(normalizeRecallScore(item.score).toFixed(3)),
+        raw_score: Number(item.score.toFixed(3)),
         memory: item.entry
       }))
     };
