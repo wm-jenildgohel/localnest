@@ -3,7 +3,8 @@
 <div className="docPanel docPanel--compact">
   <p>
     The recommended path is a global install followed by setup and doctor. Use the generated MCP
-    config block instead of hand-writing the client command when possible.
+    config block instead of hand-writing the client command when possible. On this branch, setup also
+    collects one-time consent for optional local memory.
   </p>
 </div>
 
@@ -11,6 +12,7 @@
 
 - Node.js `>=18`
 - `ripgrep` (`rg`) recommended for best lexical search performance
+- Node.js `>=22` if you want the local memory subsystem available
 
 ## Recommended install
 
@@ -49,7 +51,7 @@ npx -y localnest-mcp-doctor
     <span>3</span>
     <div>
       <strong>Generate configuration</strong>
-      <p>`localnest-mcp-setup` writes both the LocalNest config and the MCP client block.</p>
+      <p>`localnest-mcp-setup` writes both the LocalNest config and the MCP client block, and prompts once for memory consent.</p>
     </div>
   </div>
   <div className="docStep">
@@ -77,7 +79,10 @@ After setup, copy `~/.localnest/mcp.localnest.json` into your MCP client configu
         "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
         "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
         "LOCALNEST_DB_PATH": "~/.localnest/localnest.db",
-        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json"
+        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json",
+        "LOCALNEST_MEMORY_ENABLED": "true",
+        "LOCALNEST_MEMORY_BACKEND": "auto",
+        "LOCALNEST_MEMORY_DB_PATH": "~/.localnest/localnest.memory.db"
       }
     }
   }
@@ -89,3 +94,5 @@ After setup, copy `~/.localnest/mcp.localnest.json` into your MCP client configu
 - Keep `startup_timeout_sec` at `30` or higher if your MCP client is aggressive about startup timeouts.
 - Setup writes the correct command for the host platform; Windows installs should prefer the generated file output directly.
 - If `sqlite-vec` is unavailable, LocalNest can still run with the JSON backend.
+- Memory is opt-in. On Node 18/20, the rest of LocalNest still works, but memory remains unavailable.
+- `localnest-mcp-install-skill` is version-aware on this branch and skips reinstalling when the bundled skill is already current.
