@@ -4,7 +4,7 @@ node_modules/
 .mcp.localnest.json
 .mcp.localnest.*.json
 localnest.config.json
-docs/
+/docs/
 
 # Secrets and credentials (OSPS-BR-07.01)
 .env

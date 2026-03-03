@@ -1,0 +1,91 @@
+# Install
+
+<div className="docPanel docPanel--compact">
+  <p>
+    The recommended path is a global install followed by setup and doctor. Use the generated MCP
+    config block instead of hand-writing the client command when possible.
+  </p>
+</div>
+
+## Requirements
+
+- Node.js `>=18`
+- `ripgrep` (`rg`) recommended for best lexical search performance
+
+## Recommended install
+
+```bash
+npm install -g localnest-mcp
+localnest-mcp-install-skill
+localnest-mcp-setup
+localnest-mcp-doctor
+```
+
+## Fallback
+
+```bash
+npx -y localnest-mcp-setup
+npx -y localnest-mcp-doctor
+```
+
+## Install sequence
+
+<div className="docSteps">
+  <div className="docStep">
+    <span>1</span>
+    <div>
+      <strong>Install the package</strong>
+      <p>Use `npm install -g localnest-mcp` so setup, doctor, and skill commands are available directly.</p>
+    </div>
+  </div>
+  <div className="docStep">
+    <span>2</span>
+    <div>
+      <strong>Install the bundled skill</strong>
+      <p>Run `localnest-mcp-install-skill` to sync the shipped agent skill into the local skills directory.</p>
+    </div>
+  </div>
+  <div className="docStep">
+    <span>3</span>
+    <div>
+      <strong>Generate configuration</strong>
+      <p>`localnest-mcp-setup` writes both the LocalNest config and the MCP client block.</p>
+    </div>
+  </div>
+  <div className="docStep">
+    <span>4</span>
+    <div>
+      <strong>Verify the environment</strong>
+      <p>`localnest-mcp-doctor` confirms runtime dependencies and flags configuration problems early.</p>
+    </div>
+  </div>
+</div>
+
+## MCP client config
+
+After setup, copy `~/.localnest/mcp.localnest.json` into your MCP client configuration.
+
+```json
+{
+  "mcpServers": {
+    "localnest": {
+      "command": "npx",
+      "args": ["-y", "localnest-mcp"],
+      "startup_timeout_sec": 30,
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOCALNEST_CONFIG": "~/.localnest/localnest.config.json",
+        "LOCALNEST_INDEX_BACKEND": "sqlite-vec",
+        "LOCALNEST_DB_PATH": "~/.localnest/localnest.db",
+        "LOCALNEST_INDEX_PATH": "~/.localnest/localnest.index.json"
+      }
+    }
+  }
+}
+```
+
+## Notes
+
+- Keep `startup_timeout_sec` at `30` or higher if your MCP client is aggressive about startup timeouts.
+- Setup writes the correct command for the host platform; Windows installs should prefer the generated file output directly.
+- If `sqlite-vec` is unavailable, LocalNest can still run with the JSON backend.
