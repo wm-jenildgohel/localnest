@@ -85,6 +85,11 @@ const config: Config = {
           position: 'left'
         },
         {
+          href: 'https://www.npmjs.com/package/localnest-mcp',
+          label: 'v0.0.3',
+          position: 'right'
+        },
+        {
           href: 'https://github.com/wmt-mobile/localnest',
           label: 'GitHub',
           position: 'right'

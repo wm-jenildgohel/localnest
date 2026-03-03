@@ -5,12 +5,12 @@
   "author": "LocalNest",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wm-jenildgohel/localnest.git"
+    "url": "git+https://github.com/wmt-mobile/localnest.git"
   },
   "bugs": {
-    "url": "https://github.com/wm-jenildgohel/localnest/issues"
+    "url": "https://github.com/wmt-mobile/localnest/issues"
   },
-  "homepage": "https://github.com/wm-jenildgohel/localnest#readme",
+  "homepage": "https://github.com/wmt-mobile/localnest#readme",
   "keywords": [
     "mcp",
     "model-context-protocol",

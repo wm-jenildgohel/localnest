@@ -3,7 +3,7 @@
 ## Getting Started
 
 ```bash
-git clone https://github.com/wm-jenildgohel/localnest.git
+git clone https://github.com/wmt-mobile/localnest.git
 cd localnest
 npm install
 npm run setup
@@ -66,7 +66,7 @@ skills/
 ### Adding or modifying a tool
 
 Tools are registered in `src/localnest-mcp.js` using `registerJsonTool`. Each tool needs:
-- A canonical name (`localnest_*`) and optional short alias
+- A canonical name (`localnest_*`)
 - Zod input schema
 - `readOnlyHint` / `destructiveHint` annotations
 - Handler returning plain data (serialization is handled by `toolResult`)
