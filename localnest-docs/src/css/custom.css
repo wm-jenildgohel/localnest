@@ -1,0 +1,352 @@
+:root {
+  /* Design Tokens - Flame Inspired */
+  --ifm-color-primary: #1e40af;
+  /* Deep Vibrant Blue */
+  --ifm-color-primary-dark: #1e3a8a;
+  --ifm-color-primary-darker: #172554;
+  --ifm-color-primary-darkest: #0f172a;
+  --ifm-color-primary-light: #3b82f6;
+  --ifm-color-primary-lighter: #60a5fa;
+  --ifm-color-primary-lightest: #dbeafe;
+
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f8fafc;
+  --ifm-font-color-base: #334155;
+  --ifm-heading-color: #0f172a;
+
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-footer-background-color: #f1f5f9;
+  --ifm-footer-color: #64748b;
+
+  --ifm-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ifm-font-family-heading: "Outfit", sans-serif;
+  --ifm-font-family-monospace: "IBM Plex Mono", "SFMono-Regular", "Consolas", monospace;
+
+  --ifm-global-radius: 8px;
+  /* Sharper, more professional radius */
+  --ifm-leading: 1.75;
+  /* Generous vertical rhythm */
+  --ifm-code-font-size: 88%;
+
+  --site-border: 1px solid #e2e8f0;
+  --site-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --premium-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #3b82f6;
+  --ifm-color-primary-dark: #2563eb;
+  --ifm-background-color: #0f172a;
+  --ifm-background-surface-color: #1e293b;
+  --ifm-font-color-base: #94a3b8;
+  --ifm-heading-color: #f8fafc;
+  --ifm-navbar-background-color: #0f172a;
+  --ifm-footer-background-color: #020617;
+  --site-border: 1px solid #334155;
+  --site-shadow: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--ifm-background-color);
+  min-height: 100vh;
+}
+
+/* Layout Polishing */
+.siteHome {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 5rem 1.5rem;
+}
+
+.siteHome__hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  /* Centered for classic look like Flame */
+  text-align: center;
+  gap: 2.5rem;
+  margin-bottom: 5rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.siteHome__heroLead h1 {
+  font-family: var(--ifm-font-family-heading);
+  font-weight: 800;
+  font-size: clamp(2.75rem, 6vw, 4.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  margin-bottom: 2rem;
+  color: var(--ifm-heading-color);
+}
+
+.siteHome__heroLead p {
+  font-size: 1.25rem;
+  color: var(--ifm-font-color-base);
+  line-height: 1.6;
+  margin: 2rem auto;
+}
+
+.siteHome__actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.siteHome__actions .button {
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+}
+
+.siteHome__heroPanel {
+  display: none;
+  /* Removed for cleaner hero, moving stats lower or into cards */
+}
+
+/* Navbar & Sidebar */
+.navbar {
+  height: 4rem;
+  background-color: var(--ifm-navbar-background-color);
+  border-bottom: var(--site-border);
+  box-shadow: var(--site-shadow);
+}
+
+.navbar__title {
+  font-family: var(--ifm-font-family-heading);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.theme-doc-sidebar-container {
+  background-color: var(--ifm-background-color);
+  border-right: var(--site-border);
+}
+
+.menu__link {
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  margin: 0.125rem 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.menu__link:hover {
+  background-color: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary);
+}
+
+.menu__link--active {
+  background-color: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary) !important;
+  font-weight: 700;
+}
+
+.menu__list-item {
+  margin-top: 2px;
+}
+
+/* Flame-style sidebar indents for nested items */
+.menu__list .menu__list {
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--ifm-color-primary-lightest);
+  margin-left: 1rem;
+}
+
+/* Code Blocks Polish */
+.theme-code-block {
+  margin: 2rem 0 !important;
+  box-shadow: var(--site-shadow);
+  border: var(--site-border);
+  border-radius: var(--ifm-global-radius) !important;
+}
+
+.theme-code-block pre {
+  padding: 1.25rem !important;
+}
+
+/* Search Bar Refinement */
+.navbar__search-input {
+  background-color: var(--ifm-background-surface-color) !important;
+  border: var(--site-border) !important;
+  border-radius: 20px !important;
+  padding: 0.5rem 1rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.navbar__search-input:focus {
+  border-color: var(--ifm-color-primary) !important;
+  box-shadow: 0 0 0 3px var(--ifm-color-primary-lightest) !important;
+  width: 15rem !important;
+}
+
+/* Content Area */
+.theme-doc-markdown {
+  max-width: 800px;
+  padding: 0;
+  /* Removing the artificial box for a standard docs feel */
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.theme-doc-markdown h1 {
+  font-family: var(--ifm-font-family-heading);
+  font-weight: 800;
+  font-size: 3rem;
+  margin-bottom: 2.5rem;
+  color: var(--ifm-heading-color);
+  border-bottom: 2px solid var(--ifm-color-primary);
+  display: inline-block;
+  padding-bottom: 0.5rem;
+}
+
+.theme-doc-markdown h2 {
+  font-family: var(--ifm-font-family-heading);
+  font-weight: 700;
+  font-size: 2rem;
+  margin-top: 4rem;
+  margin-bottom: 1.5rem;
+  border-bottom: var(--site-border);
+  padding-bottom: 0.5rem;
+}
+
+.theme-doc-markdown h3 {
+  font-family: var(--ifm-font-family-heading);
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin-top: 2.5rem;
+}
+
+.theme-doc-markdown p {
+  margin-bottom: 1.5rem;
+}
+
+/* Global Components */
+.docGrid {
+  display: grid;
+  gap: 1.5rem;
+  margin: 3rem 0;
+}
+
+.docGrid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.docGrid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.docPanel {
+  background-color: var(--ifm-background-surface-color);
+  border: var(--site-border);
+  border-radius: var(--ifm-global-radius);
+  padding: 1.5rem;
+  box-shadow: var(--site-shadow);
+}
+
+.docLinkCard {
+  text-decoration: none;
+  color: inherit;
+  background-color: var(--ifm-background-surface-color);
+  border: var(--site-border);
+  border-radius: var(--ifm-global-radius);
+  padding: 1.75rem;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.docLinkCard:hover {
+  text-decoration: none;
+  color: inherit;
+  border-color: var(--ifm-color-primary);
+  box-shadow: var(--premium-shadow);
+  transform: translateY(-2px);
+}
+
+.docLinkCard strong {
+  font-family: var(--ifm-font-family-heading);
+  font-size: 1.25rem;
+  color: var(--ifm-heading-color);
+}
+
+.docLinkCard__icon {
+  width: 3rem;
+  height: 3rem;
+  background-color: var(--ifm-color-primary-lightest);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.docLinkCard__icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  stroke: var(--ifm-color-primary);
+  fill: none;
+}
+
+.docSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin: 3rem 0;
+}
+
+.docStep {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  padding: 1.5rem;
+  background-color: var(--ifm-background-surface-color);
+  border: var(--site-border);
+  border-radius: var(--ifm-global-radius);
+}
+
+.docStep>span {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: var(--ifm-color-primary);
+  color: #ffffff;
+  border-radius: 4px;
+  /* Squares for a more engine-like feel */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-family: var(--ifm-font-family-heading);
+}
+
+.docStep strong {
+  display: block;
+  font-family: var(--ifm-font-family-heading);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Admonitions Polishing */
+.alert {
+  border-radius: var(--ifm-global-radius);
+  border: none;
+  border-left: 4px solid var(--ifm-color-primary);
+  padding: 1.25rem 1.5rem;
+}
+
+@media (max-width: 996px) {
+
+  .docGrid--2,
+  .docGrid--3 {
+    grid-template-columns: 1fr;
+  }
+}
