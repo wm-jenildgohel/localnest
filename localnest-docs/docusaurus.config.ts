@@ -51,7 +51,6 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/docs',
-          editUrl: 'https://github.com/wmt-mobile/localnest/tree/main/localnest-docs/',
           showLastUpdateAuthor: false,
           showLastUpdateTime: true,
           sidebarCollapsible: true,
