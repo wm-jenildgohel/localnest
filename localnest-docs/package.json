@@ -20,5 +20,10 @@
     "prism-react-renderer": "latest",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "latest",
+    "@docusaurus/tsconfig": "latest",
+    "typescript": "latest"
   }
 }
