@@ -47,6 +47,29 @@ function isGenericShortQuery(queryTerms) {
     queryTerms.every((term) => GENERIC_QUERY_TOKENS.has(term));
 }
 
+function splitPendingContextByLine(pending, matchLine) {
+  if (!pending || pending.length === 0) {
+    return { before: [], remaining: [] };
+  }
+
+  const before = [];
+  let splitIdx = pending.length;
+  for (let i = 0; i < pending.length; i += 1) {
+    const item = pending[i];
+    if (item.line < matchLine) {
+      before.push(item.text);
+      continue;
+    }
+    splitIdx = i;
+    break;
+  }
+
+  return {
+    before,
+    remaining: splitIdx < pending.length ? pending.slice(splitIdx) : []
+  };
+}
+
 export class SearchService {
   constructor({ workspace, ignoreDirs, hasRipgrep, rgTimeoutMs, maxFileBytes, vectorIndex }) {
     this.workspace = workspace;
@@ -188,6 +211,8 @@ export class SearchService {
     const matches = [];
     // ctxBuffer: file → Array<{line, text}> pending context_before candidates
     const ctxBuffer = new Map();
+    // lastMatchByFile: file → most recent match (for context_after attachment)
+    const lastMatchByFile = new Map();
     const trailingNl = /\n$/;
 
     for (const raw of out.split(/\r?\n/)) {
@@ -200,13 +225,17 @@ export class SearchService {
         const line = obj.data.line_number;
         const text = (obj.data.lines?.text || '').replace(trailingNl, '').trim();
 
-        // Drain buffered context lines that precede this match line
-        const buf = ctxBuffer.get(file) || [];
-        const before = buf.filter((c) => c.line < line).map((c) => c.text);
-        // Keep anything after this line (could be before a later match in same file)
-        ctxBuffer.set(file, buf.filter((c) => c.line > line));
+        // Drain buffered context lines that precede this match line.
+        const split = splitPendingContextByLine(ctxBuffer.get(file), line);
+        if (split.remaining.length > 0) {
+          ctxBuffer.set(file, split.remaining);
+        } else {
+          ctxBuffer.delete(file);
+        }
 
-        matches.push({ file, line, text, context_before: before, context_after: [] });
+        const match = { file, line, text, context_before: split.before, context_after: [] };
+        matches.push(match);
+        lastMatchByFile.set(file, match);
         if (matches.length >= maxResults) break;
 
       } else if (obj.type === 'context') {
@@ -214,8 +243,8 @@ export class SearchService {
         const ctxLine = obj.data.line_number;
         const ctxText = (obj.data.lines?.text || '').replace(trailingNl, '');
 
-        // Attach to the most recent match for this file if it's after it
-        const lastMatch = [...matches].reverse().find((m) => m.file === file);
+        // Attach to the most recent match for this file if it's after it.
+        const lastMatch = lastMatchByFile.get(file);
         if (lastMatch && ctxLine > lastMatch.line) {
           lastMatch.context_after.push(ctxText);
         } else {
