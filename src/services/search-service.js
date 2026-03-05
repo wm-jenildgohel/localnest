@@ -31,6 +31,20 @@ function validateRegex(pattern) {
   }
 }
 
+function buildLineMatcher({ query, useRegex, caseSensitive }) {
+  if (useRegex) {
+    const regex = new RegExp(query, caseSensitive ? '' : 'i');
+    return (line) => regex.test(line);
+  }
+
+  if (caseSensitive) {
+    return (line) => line.includes(query);
+  }
+
+  const normalizedNeedle = query.toLowerCase();
+  return (line) => line.toLowerCase().includes(normalizedNeedle);
+}
+
 function scorePathAffinity(filePath, queryTerms) {
   if (!filePath || queryTerms.length === 0) return 0;
   const pathTerms = new Set(tokenize(String(filePath || '')));
@@ -98,9 +112,7 @@ export class SearchService {
       }
     }
 
-    const regex = useRegex
-      ? new RegExp(query, caseSensitive ? '' : 'i')
-      : new RegExp(escapeRegex(query), caseSensitive ? '' : 'i');
+    const lineMatcher = buildLineMatcher({ query, useRegex, caseSensitive });
     const wildcardPattern = globToRegExp(glob);
 
     const matches = [];
@@ -128,7 +140,7 @@ export class SearchService {
 
       this.searchWithFilesystemWalk({
         base,
-        regex,
+        lineMatcher,
         wildcardPattern,
         maxResults,
         into: matches,
@@ -257,7 +269,7 @@ export class SearchService {
     return matches;
   }
 
-  searchWithFilesystemWalk({ base, regex, wildcardPattern, maxResults, into, contextLines = 0 }) {
+  searchWithFilesystemWalk({ base, lineMatcher, wildcardPattern, maxResults, into, contextLines = 0 }) {
     for (const { files } of this.workspace.walkDirectories(base)) {
       for (const filePath of files) {
         if (!this.workspace.isLikelyTextFile(filePath)) continue;
@@ -274,7 +286,7 @@ export class SearchService {
 
         const lines = text.split(/\r?\n/);
         for (let i = 0; i < lines.length; i += 1) {
-          if (!regex.test(lines[i])) continue;
+          if (!lineMatcher(lines[i])) continue;
 
           const result = { file: filePath, line: i + 1, text: lines[i].trim() };
           if (contextLines > 0) {
