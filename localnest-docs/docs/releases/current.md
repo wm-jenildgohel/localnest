@@ -1,10 +1,10 @@
 ---
-description: Current beta branch notes for localnest-mcp, including memory workflows, setup changes, sync, and canonical tool behavior.
+description: Current beta branch notes for localnest-mcp, including memory workflows, setup changes, and canonical tool behavior.
 ---
 
 # Current Beta Release
 
-Current beta branch documentation for `localnest-mcp`, covering memory workflow tools, setup migration behavior, sync workflow, and the active canonical `localnest_*` tool contract.
+Current beta branch documentation for `localnest-mcp`, covering memory workflow tools, setup migration behavior, and the active canonical `localnest_*` tool contract.
 
 <div className="docGrid docGrid--3">
   <div className="docPanel">
@@ -33,7 +33,6 @@ Current beta branch documentation for `localnest-mcp`, covering memory workflow 
 - version-aware skill sync behavior
 - setup-time memory consent and config migration
 - `localnest` top-level CLI command (`setup`, `doctor`, `upgrade`)
-- optional encrypted Google Drive backup sync via `localnest sync`
 
 ## How to use this page
 

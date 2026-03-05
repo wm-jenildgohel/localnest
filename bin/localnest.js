@@ -15,7 +15,6 @@ function printHelp() {
   process.stdout.write('  setup                     run setup wizard\n');
   process.stdout.write('  doctor                    run diagnostics\n');
   process.stdout.write('  upgrade                   upgrade package and migrate setup\n');
-  process.stdout.write('  sync                      encrypted Google Drive sync (init/push/pull/status)\n');
   process.stdout.write('  version                   print version\n');
   process.stdout.write('  help                      show this help\n');
 }
@@ -53,11 +52,6 @@ async function main() {
 
   if (command === 'upgrade') {
     await forwardTo('../scripts/upgrade-localnest.mjs');
-    return;
-  }
-
-  if (command === 'sync') {
-    await forwardTo('../scripts/sync-localnest.mjs');
     return;
   }
 

@@ -9,11 +9,6 @@ All notable changes to this project will be documented in this file.
 ### Added
 - New top-level `localnest` CLI subcommands:
   - `localnest upgrade` (single canonical upgrade command with version argument support)
-  - `localnest sync init|push|pull|status` (encrypted Google Drive appData backup flow)
-- New sync implementation:
-  - snapshot/compress/encrypt backup workflow for `~/.localnest/config` and `~/.localnest/data`
-  - OAuth device-flow initialization and refresh-token based Drive upload/download
-  - local sync status tracking and manifest-based remote restore
 
 ### Changed
 - Package/runtime version bumped to `0.0.4-beta.5`.
@@ -23,6 +18,7 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - Deprecated `localnest update` alias (keep `localnest upgrade` only).
 - Legacy audit/plan report artifacts removed from repository root.
+- Experimental backup sync CLI and related Google Drive integration.
 
 ## [0.0.4-beta.4] - 2026-03-03
 
