@@ -2,6 +2,12 @@
 
 A local-first MCP server that gives AI agents safe, read-only access to your codebase — with optional semantic indexing for high-quality retrieval.
 
+## This Branch Is For
+
+- Users pinned to `0.0.2-beta.3` (pre-stable but feature-mature retrieval line)
+- Transitional config paths (`~/.localnest/localnest.config.json`)
+- Canonical tools available, legacy aliases still supported
+
 ## What It Does
 
 - **File discovery** — scoped, safe reads under configured roots
@@ -30,7 +36,7 @@ Install ripgrep:
 
 **Global install (recommended):**
 ```bash
-npm install -g localnest-mcp
+npm install -g localnest-mcp@0.0.2-beta.3
 localnest-mcp-install-skill
 localnest-mcp-setup
 localnest-mcp-doctor
