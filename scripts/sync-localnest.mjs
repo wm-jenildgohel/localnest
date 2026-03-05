@@ -35,8 +35,55 @@ async function ask(question) {
   const rl = readline.createInterface({ input, output });
   try {
     return (await rl.question(question)).trim();
+  } catch (error) {
+    throw new Error(`Input interrupted while waiting for: ${question.trim()}`);
   } finally {
     rl.close();
+  }
+}
+
+function isLikelyGoogleClientId(value) {
+  if (!value) return false;
+  if (value.includes(' ')) return false;
+  return value.endsWith('.apps.googleusercontent.com');
+}
+
+async function resolveGoogleClientId() {
+  const fromArg = parseArg('client-id');
+  if (fromArg) {
+    if (!isLikelyGoogleClientId(fromArg)) {
+      throw new Error(
+        'Invalid --client-id format. Expected a Google OAuth client id ending with ".apps.googleusercontent.com".'
+      );
+    }
+    return fromArg;
+  }
+
+  const fromEnv = process.env.LOCALNEST_SYNC_GOOGLE_CLIENT_ID;
+  if (fromEnv) {
+    if (!isLikelyGoogleClientId(fromEnv)) {
+      throw new Error(
+        'Invalid LOCALNEST_SYNC_GOOGLE_CLIENT_ID format. Expected value ending with ".apps.googleusercontent.com".'
+      );
+    }
+    return fromEnv;
+  }
+
+  process.stdout.write('Google OAuth client ID is required.\n');
+  process.stdout.write('Example: 1234567890-abcdefg.apps.googleusercontent.com\n');
+  process.stdout.write('Press Ctrl+C to cancel.\n\n');
+
+  while (true) {
+    const value = await ask('Google OAuth client ID: ');
+    if (!value) {
+      process.stdout.write('Client ID cannot be empty.\n');
+      continue;
+    }
+    if (!isLikelyGoogleClientId(value)) {
+      process.stdout.write('Invalid format. Expected value ending with ".apps.googleusercontent.com".\n');
+      continue;
+    }
+    return value;
   }
 }
 
@@ -127,12 +174,7 @@ async function resolvePassphrase() {
 }
 
 async function runInit() {
-  const clientId = parseArg('client-id')
-    || process.env.LOCALNEST_SYNC_GOOGLE_CLIENT_ID
-    || await ask('Google OAuth client ID: ');
-  if (!clientId) {
-    throw new Error('client id is required (or set LOCALNEST_SYNC_GOOGLE_CLIENT_ID).');
-  }
+  const clientId = await resolveGoogleClientId();
   const clientSecret = parseArg('client-secret') || await ask('Google OAuth client secret (optional): ');
 
   const device = await requestDeviceCode({
