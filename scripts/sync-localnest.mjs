@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import crypto from 'node:crypto';
+import http from 'node:http';
 import readline from 'node:readline/promises';
+import { spawnSync } from 'node:child_process';
 import { stdin as input, stdout as output } from 'node:process';
 import { resolveLocalnestHome, migrateLocalnestHomeLayout } from '../src/home-layout.js';
 import { SyncService } from '../src/services/sync-service.js';
@@ -13,6 +16,7 @@ const argv = process.argv.slice(2);
 const localnestHome = resolveLocalnestHome(process.env);
 migrateLocalnestHomeLayout(localnestHome);
 const syncService = new SyncService({ localnestHome });
+const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
 function parseArg(name) {
   const prefix = `--${name}=`;
@@ -91,99 +95,209 @@ async function resolveGoogleClientId() {
   }
 }
 
-async function requestDeviceCode({ clientId, scope }) {
+function toBase64Url(buffer) {
+  return Buffer.from(buffer)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function buildCodeVerifier() {
+  return toBase64Url(crypto.randomBytes(64));
+}
+
+function buildCodeChallenge(codeVerifier) {
+  return toBase64Url(crypto.createHash('sha256').update(codeVerifier).digest());
+}
+
+function maybeOpenBrowser(url) {
+  if (hasFlag('no-browser')) return false;
+
+  const attempts = process.platform === 'darwin'
+    ? [['open', [url]]]
+    : process.platform === 'win32'
+      ? [['cmd', ['/c', 'start', '', url]]]
+      : [['xdg-open', [url]]];
+
+  for (const [command, args] of attempts) {
+    const run = spawnSync(command, args, { stdio: 'ignore' });
+    if (run.status === 0 && !run.error) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function startPkceCallbackServer({ timeoutMs = 300000 } = {}) {
+  let settled = false;
+  let timeout = null;
+  let resolveCode;
+  let rejectCode;
+  const codePromise = new Promise((resolve, reject) => {
+    resolveCode = resolve;
+    rejectCode = reject;
+  });
+
+  const server = http.createServer((req, res) => {
+    const host = req.headers.host || '127.0.0.1';
+    const reqUrl = new URL(req.url || '/', `http://${host}`);
+    if (reqUrl.pathname !== '/oauth2callback') {
+      res.statusCode = 404;
+      res.end('Not found');
+      return;
+    }
+
+    const done = (error, code) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      if (error) {
+        rejectCode(error);
+      } else {
+        resolveCode(code);
+      }
+      setImmediate(() => {
+        server.close();
+      });
+    };
+
+    const authError = reqUrl.searchParams.get('error');
+    if (authError) {
+      res.statusCode = 400;
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end('<h2>Authorization failed.</h2><p>You can return to the terminal.</p>');
+      done(new Error(`Authorization failed: ${authError}`));
+      return;
+    }
+
+    const code = reqUrl.searchParams.get('code');
+    if (!code) {
+      res.statusCode = 400;
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end('<h2>Missing authorization code.</h2><p>You can return to the terminal.</p>');
+      done(new Error('Google callback did not include authorization code.'));
+      return;
+    }
+
+    res.statusCode = 200;
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end('<h2>Authorization received.</h2><p>You can close this tab and return to LocalNest CLI.</p>');
+    done(null, code);
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve());
+  });
+
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    server.close();
+    throw new Error('Unable to bind OAuth callback listener.');
+  }
+
+  timeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    rejectCode(new Error('OAuth authorization timed out. Retry and complete browser approval sooner.'));
+    setImmediate(() => {
+      server.close();
+    });
+  }, timeoutMs);
+
+  return {
+    redirectUri: `http://127.0.0.1:${address.port}/oauth2callback`,
+    codePromise
+  };
+}
+
+async function exchangeAuthorizationCode({
+  clientId,
+  clientSecret,
+  code,
+  redirectUri,
+  codeVerifier
+}) {
   const body = new URLSearchParams();
   body.set('client_id', clientId);
-  body.set('scope', scope);
-  const response = await fetch('https://oauth2.googleapis.com/device/code', {
+  if (clientSecret) {
+    body.set('client_secret', clientSecret);
+  }
+  body.set('code', code);
+  body.set('code_verifier', codeVerifier);
+  body.set('grant_type', 'authorization_code');
+  body.set('redirect_uri', redirectUri);
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body
   });
+
+  let payload = null;
+  let text = '';
+  try {
+    text = await response.text();
+    payload = JSON.parse(text);
+  } catch {
+    // Keep fallback text.
+  }
+
   if (!response.ok) {
-    let payload = null;
-    let text = '';
-    try {
-      text = await response.text();
-      payload = JSON.parse(text);
-    } catch {
-      // Keep text fallback.
-    }
-
-    const errorCode = payload?.error || '';
-    const description = payload?.error_description || text || `HTTP ${response.status}`;
-    if (errorCode === 'invalid_client' && description.toLowerCase().includes('limited input')) {
-      throw new Error(
-        [
-          'Google OAuth client type is not compatible with device login.',
-          'Required client type: "TVs and Limited Input devices".',
-          'Create a new OAuth client in Google Cloud Console with that type, then run:',
-          `localnest sync init --client-id="${clientId}"`,
-          'Guide: https://developers.google.com/identity/protocols/oauth2/limited-input-device#creatingcred'
-        ].join('\n')
-      );
-    }
-
-    if (errorCode === 'invalid_scope' && scope === 'https://www.googleapis.com/auth/drive.appdata') {
-      process.stdout.write(
-        '[localnest-sync] Google rejected drive.appdata for this client. Retrying with drive.appfolder alias...\n'
-      );
-      return requestDeviceCode({
-        clientId,
-        scope: 'https://www.googleapis.com/auth/drive.appfolder'
-      });
-    }
-
-    throw new Error(`Device auth start failed (${response.status}): ${description}`);
+    const description = payload?.error_description || payload?.error || text || `HTTP ${response.status}`;
+    throw new Error(`OAuth token exchange failed (${response.status}): ${description}`);
   }
-  const payload = await response.json();
-  return {
-    ...payload,
-    requested_scope: scope
-  };
+
+  if (!payload?.refresh_token) {
+    throw new Error(
+      [
+        'Google did not return a refresh token.',
+        'Retry and ensure you approve consent fully.',
+        'If this persists, revoke previous app consent in your Google account and run init again.'
+      ].join('\n')
+    );
+  }
+
+  return payload;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+async function runPkceAuthorization({ clientId, clientSecret, scope }) {
+  const codeVerifier = buildCodeVerifier();
+  const codeChallenge = buildCodeChallenge(codeVerifier);
+  const callback = await startPkceCallbackServer();
 
-async function pollDeviceToken({ clientId, clientSecret, deviceCode, intervalSec, expiresInSec }) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < expiresInSec * 1000) {
-    const body = new URLSearchParams();
-    body.set('client_id', clientId);
-    if (clientSecret) {
-      body.set('client_secret', clientSecret);
-    }
-    body.set('device_code', deviceCode);
-    body.set('grant_type', 'urn:ietf:params:oauth:grant-type:device_code');
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', callback.redirectUri);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', scope);
+  authUrl.searchParams.set('access_type', 'offline');
+  authUrl.searchParams.set('prompt', 'consent');
+  authUrl.searchParams.set('code_challenge', codeChallenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
 
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body
-    });
-    const payload = await response.json();
-    if (response.ok && payload.refresh_token) {
-      return payload;
-    }
-    if (payload.error === 'authorization_pending') {
-      await sleep(intervalSec * 1000);
-      continue;
-    }
-    if (payload.error === 'slow_down') {
-      await sleep((intervalSec + 2) * 1000);
-      continue;
-    }
-    if (payload.error === 'access_denied') {
-      throw new Error('Authorization denied by user.');
-    }
-    if (payload.error) {
-      throw new Error(`Device auth failed: ${payload.error}`);
-    }
-    await sleep(intervalSec * 1000);
+  const opened = maybeOpenBrowser(authUrl.toString());
+  process.stdout.write('\nComplete Google auth:\n');
+  if (opened) {
+    process.stdout.write('1) Browser opened automatically.\n');
+  } else {
+    process.stdout.write('1) Open this URL in your browser:\n');
+    process.stdout.write(`${authUrl.toString()}\n`);
   }
-  throw new Error('Device authorization timed out.');
+  process.stdout.write('2) Approve access.\n');
+  process.stdout.write('3) Wait for "Authorization received" page.\n\n');
+
+  const code = await callback.codePromise;
+  const token = await exchangeAuthorizationCode({
+    clientId,
+    clientSecret,
+    code,
+    redirectUri: callback.redirectUri,
+    codeVerifier
+  });
+  return token;
 }
 
 function printHelp() {
@@ -201,6 +315,7 @@ function printHelp() {
   process.stdout.write('Options:\n');
   process.stdout.write('  --client-id=<oauth-client-id>      for sync init\n');
   process.stdout.write('  --client-secret=<oauth-secret>     optional for sync init\n');
+  process.stdout.write('  --no-browser                       print auth URL instead of auto-opening browser\n');
   process.stdout.write('  --passphrase=<value>               optional for legacy passphrase configs\n');
   process.stdout.write('  --ask-passphrase                   prompt for passphrase (legacy configs)\n');
   process.stdout.write('  --yes                              non-interactive where possible\n');
@@ -208,6 +323,7 @@ function printHelp() {
   process.stdout.write('Notes:\n');
   process.stdout.write('  - Sync stores encrypted snapshot of ~/.localnest/config and ~/.localnest/data.\n');
   process.stdout.write('  - Google Drive appDataFolder is used by default.\n');
+  process.stdout.write('  - Init uses Desktop OAuth (PKCE) via local loopback callback.\n');
   process.stdout.write('  - New setups generate and store a local encryption key automatically.\n');
 }
 
@@ -231,24 +347,14 @@ async function resolveOptionalPassphrase() {
 
 async function runInit() {
   const clientId = await resolveGoogleClientId();
-  const clientSecret = parseArg('client-secret') || await ask('Google OAuth client secret (optional): ');
-
-  const device = await requestDeviceCode({
-    clientId,
-    scope: 'https://www.googleapis.com/auth/drive.appdata'
-  });
-
-  process.stdout.write('\nComplete Google auth:\n');
-  process.stdout.write(`1) Open: ${device.verification_url || device.verification_uri}\n`);
-  process.stdout.write(`2) Enter code: ${device.user_code}\n`);
-  process.stdout.write('Waiting for authorization...\n\n');
-
-  const token = await pollDeviceToken({
+  const clientSecretArg = parseArg('client-secret');
+  const clientSecret = clientSecretArg !== null
+    ? clientSecretArg
+    : (hasFlag('yes') ? '' : await ask('Google OAuth client secret (optional): '));
+  const token = await runPkceAuthorization({
     clientId,
     clientSecret,
-    deviceCode: device.device_code,
-    intervalSec: Number.parseInt(String(device.interval || '5'), 10) || 5,
-    expiresInSec: Number.parseInt(String(device.expires_in || '900'), 10) || 900
+    scope: GOOGLE_DRIVE_SCOPE
   });
 
   const config = SyncService.createGoogleDriveConfig({
@@ -256,9 +362,7 @@ async function runInit() {
     clientSecret: clientSecret || null,
     refreshToken: token.refresh_token
   });
-  if (device.requested_scope) {
-    config.google.scope = device.requested_scope;
-  }
+  config.google.scope = GOOGLE_DRIVE_SCOPE;
   syncService.writeSyncConfig(config);
   syncService.writeSyncStatus({
     initializedAt: new Date().toISOString(),
