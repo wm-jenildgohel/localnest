@@ -25,41 +25,48 @@ function forwardTo(modulePath) {
   return import(modulePath);
 }
 
-if (command === '' || command === 'help' || command === '--help' || command === '-h') {
+async function main() {
+  if (command === '' || command === 'help' || command === '--help' || command === '-h') {
+    printHelp();
+    process.exit(0);
+  }
+
+  if (command === 'version' || command === '--version' || command === '-v') {
+    process.stdout.write(`${SERVER_VERSION}\n`);
+    process.exit(0);
+  }
+
+  if (command === 'start' || command === 'serve') {
+    await import('../src/localnest-mcp.js');
+    return;
+  }
+
+  if (command === 'setup') {
+    await forwardTo('../scripts/setup-localnest.mjs');
+    return;
+  }
+
+  if (command === 'doctor') {
+    await forwardTo('../scripts/doctor-localnest.mjs');
+    return;
+  }
+
+  if (command === 'upgrade') {
+    await forwardTo('../scripts/upgrade-localnest.mjs');
+    return;
+  }
+
+  if (command === 'sync') {
+    await forwardTo('../scripts/sync-localnest.mjs');
+    return;
+  }
+
+  process.stderr.write(`Unknown command: ${command}\n\n`);
   printHelp();
-  process.exit(0);
+  process.exit(1);
 }
 
-if (command === 'version' || command === '--version' || command === '-v') {
-  process.stdout.write(`${SERVER_VERSION}\n`);
-  process.exit(0);
-}
-
-if (command === 'start' || command === 'serve') {
-  await import('../src/localnest-mcp.js');
-  process.exit(0);
-}
-
-if (command === 'setup') {
-  await forwardTo('../scripts/setup-localnest.mjs');
-  process.exit(0);
-}
-
-if (command === 'doctor') {
-  await forwardTo('../scripts/doctor-localnest.mjs');
-  process.exit(0);
-}
-
-if (command === 'upgrade') {
-  await forwardTo('../scripts/upgrade-localnest.mjs');
-  process.exit(0);
-}
-
-if (command === 'sync') {
-  await forwardTo('../scripts/sync-localnest.mjs');
-  process.exit(0);
-}
-
-process.stderr.write(`Unknown command: ${command}\n\n`);
-printHelp();
-process.exit(1);
+main().catch((error) => {
+  process.stderr.write(`[localnest-cli] fatal: ${error?.message || error}\n`);
+  process.exit(1);
+});
