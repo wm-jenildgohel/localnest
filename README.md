@@ -13,6 +13,12 @@ Documentation: https://wmt-mobile.github.io/localnest/
 
 Current beta package: `0.0.4-beta.4`
 
+Engineering docs for contributors:
+- [`guides/README.md`](./guides/README.md)
+- [`guides/repository-structure.md`](./guides/repository-structure.md)
+- [`guides/architecture.md`](./guides/architecture.md)
+- [`guides/code-standards.md`](./guides/code-standards.md)
+
 ## What It Does
 
 - **File discovery** — scoped, safe reads under configured roots
@@ -248,6 +254,14 @@ npx skills add https://github.com/wmt-mobile/localnest --skill localnest-mcp
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
+Engineering standards and architecture references live under [`guides/`](./guides/README.md).
+
+## Thanks to Contributors
+
+Thanks to everyone who contributes code, docs, reviews, testing, and issue reports to LocalNest.
+Your work directly improves reliability and developer experience for the entire community.
+
+[![Contributors](https://contrib.rocks/image?repo=wmt-mobile/localnest)](https://github.com/wmt-mobile/localnest/graphs/contributors)
 
 ## Docs Site
 

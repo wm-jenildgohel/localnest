@@ -7,7 +7,7 @@ export function registerCoreTools({
   updates
 }) {
   registerJsonTool(
-    ['localnest_server_status', 'server_status'],
+    'localnest_server_status',
     {
       title: 'Server Status',
       description: 'Return runtime status and active configuration summary for this MCP server.',
@@ -23,7 +23,7 @@ export function registerCoreTools({
   );
 
   registerJsonTool(
-    ['localnest_usage_guide', 'usage_guide'],
+    'localnest_usage_guide',
     {
       title: 'Usage Guide',
       description: 'Return concise best-practice guidance for users and AI agents using this MCP.',

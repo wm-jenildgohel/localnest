@@ -39,27 +39,10 @@ npm run install:skill
 
 ## Project Structure
 
-```
-src/
-  localnest-mcp.js              # MCP server entry point — tool registration
-  config.js                     # Runtime config, env vars, defaults
-  migrations/
-    config-migrator.js          # Auto-migration for older config schemas
-  services/
-    tokenizer.js                # Shared tokenizer (camelCase, digit, kebab splitting)
-    workspace-service.js        # File discovery, tree, reads, project listing
-    search-service.js           # Lexical + hybrid search orchestration
-    vector-index-service.js     # JSON-backend semantic index
-    sqlite-vec-index-service.js # sqlite-vec backend: TF-IDF, inverted index, schema migrations
-scripts/
-  setup-localnest.mjs           # Interactive setup CLI
-  doctor-localnest.mjs          # Health check CLI
-  install-localnest-skill.mjs   # Skill installer
-skills/
-  localnest-mcp/
-    SKILL.md                    # Bundled agent skill (source of truth)
-    agents/openai.yaml          # OpenAI/Codex agent interface config
-```
+Contributor references:
+- [`guides/repository-structure.md`](./guides/repository-structure.md)
+- [`guides/architecture.md`](./guides/architecture.md)
+- [`guides/code-standards.md`](./guides/code-standards.md)
 
 ## Making Changes
 

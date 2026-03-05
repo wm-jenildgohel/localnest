@@ -10,7 +10,7 @@ export function registerRetrievalTools({
   defaultMaxResults
 }) {
   registerJsonTool(
-    ['localnest_list_roots', 'list_roots'],
+    'localnest_list_roots',
     {
       title: 'List Roots',
       description: 'List configured local roots available to this MCP server.',
@@ -29,7 +29,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_list_projects', 'list_projects'],
+    'localnest_list_projects',
     {
       title: 'List Projects',
       description: 'List first-level project directories under a root.',
@@ -58,7 +58,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_project_tree', 'project_tree'],
+    'localnest_project_tree',
     {
       title: 'Project Tree',
       description: 'Return a compact tree of files/directories for a project path.',
@@ -78,7 +78,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_index_status', 'index_status'],
+    'localnest_index_status',
     {
       title: 'Index Status',
       description: 'Return local semantic index status and metadata.',
@@ -94,7 +94,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_index_project', 'index_project'],
+    'localnest_index_project',
     {
       title: 'Index Project',
       description: 'Build or refresh semantic index for a project or across all roots.',
@@ -120,7 +120,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_search_files', 'search_files'],
+    'localnest_search_files',
     {
       title: 'Search Files',
       description: 'Search file paths and names matching a query. Use this first when looking for a module, feature, or component by name (e.g. "sso", "payment", "auth"). Much faster than content search for module discovery, and handles cases where the keyword only appears in file/directory names.',
@@ -148,7 +148,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_search_code', 'search_code'],
+    'localnest_search_code',
     {
       title: 'Search Code',
       description: 'Search text across files under a project/root and return matching lines. Best for exact symbol names, imports, or known identifiers. Use use_regex=true for patterns (e.g. "async\\s+function\\s+get\\w+"). Use context_lines to include surrounding lines with each match.',
@@ -182,7 +182,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_search_hybrid', 'search_hybrid'],
+    'localnest_search_hybrid',
     {
       title: 'Search Hybrid',
       description: 'Run lexical + semantic retrieval and return RRF-ranked results.',
@@ -216,7 +216,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_read_file', 'read_file'],
+    'localnest_read_file',
     {
       title: 'Read File',
       description: 'Read a bounded chunk of a file with line numbers.',
@@ -236,7 +236,7 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
-    ['localnest_summarize_project', 'summarize_project'],
+    'localnest_summarize_project',
     {
       title: 'Summarize Project',
       description: 'Return a high-level summary of a project directory.',
