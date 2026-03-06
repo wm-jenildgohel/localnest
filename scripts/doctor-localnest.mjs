@@ -249,21 +249,18 @@ function checkModelCacheWritable() {
     return {
       id: 'model_cache',
       ok: false,
-      detail: `Model cache not writable (embed preferred: ${embedPreferred}, reranker preferred: ${rerankerPreferred})`,
+      detail: 'Model cache not writable for configured or fallback locations',
       fix: 'Set LOCALNEST_EMBED_CACHE_DIR/LOCALNEST_RERANKER_CACHE_DIR to a writable path, then re-run localnest setup.'
     };
   }
 
-  const details = [];
-  details.push(`embed=${embedResolved.path}`);
-  details.push(`reranker=${rerankerResolved.path}`);
-  if (embedResolved.fallbackUsed || rerankerResolved.fallbackUsed) {
-    details.push('fallback used for unwritable preferred path(s)');
-  }
+  const fallbackUsed = embedResolved.fallbackUsed || rerankerResolved.fallbackUsed;
   return {
     id: 'model_cache',
     ok: true,
-    detail: `Model cache writable (${details.join(', ')})`
+    detail: fallbackUsed
+      ? 'Model cache writable (fallback active)'
+      : 'Model cache writable'
   };
 }
 

@@ -270,12 +270,12 @@ export function buildRuntimeConfig(env = process.env) {
 
   if (embeddingCacheResolved.fallbackUsed) {
     process.stderr.write(
-      `[localnest-config] embedding cache fallback: ${embeddingCacheResolved.path} (preferred: ${embeddingCachePreferred})\n`
+      '[localnest-config] embedding cache fallback enabled due to unwritable preferred cache path\n'
     );
   }
   if (rerankerCacheResolved.fallbackUsed) {
     process.stderr.write(
-      `[localnest-config] reranker cache fallback: ${rerankerCacheResolved.path} (preferred: ${rerankerCachePreferred})\n`
+      '[localnest-config] reranker cache fallback enabled due to unwritable preferred cache path\n'
     );
   }
 
