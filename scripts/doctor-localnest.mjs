@@ -3,7 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { buildLocalnestPaths, resolveConfigPath as resolveDefaultConfigPath, resolveLocalnestHome } from '../src/home-layout.js';
+import {
+  buildLocalnestPaths,
+  resolveConfigPath as resolveDefaultConfigPath,
+  resolveLocalnestHome,
+  resolveWritableModelCacheDir
+} from '../src/home-layout.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -37,23 +42,27 @@ function resolveConfigPath() {
   });
 }
 
-function resolveModelCacheDir() {
-  const byEnv = (process.env.LOCALNEST_EMBED_CACHE_DIR || '').trim();
-  if (byEnv) return path.resolve(byEnv);
-
+function parseConfigForModelCacheDirs() {
+  const out = {
+    embeddingCacheDir: '',
+    rerankerCacheDir: ''
+  };
   const cfgPath = resolveConfigPath();
   try {
-    if (!fs.existsSync(cfgPath)) {
-      return buildLocalnestPaths(resolveLocalnestHome(process.env)).dirs.cache;
-    }
+    if (!fs.existsSync(cfgPath)) return out;
     const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    const byConfig = parsed?.index?.embeddingCacheDir;
-    if (typeof byConfig === 'string' && byConfig.trim()) return path.resolve(byConfig);
+    const byConfigEmbedding = parsed?.index?.embeddingCacheDir;
+    const byConfigReranker = parsed?.index?.rerankerCacheDir;
+    if (typeof byConfigEmbedding === 'string' && byConfigEmbedding.trim()) {
+      out.embeddingCacheDir = path.resolve(byConfigEmbedding);
+    }
+    if (typeof byConfigReranker === 'string' && byConfigReranker.trim()) {
+      out.rerankerCacheDir = path.resolve(byConfigReranker);
+    }
   } catch {
-    // Fall through to default cache dir.
+    // Keep defaults.
   }
-
-  return buildLocalnestPaths(resolveLocalnestHome(process.env)).dirs.cache;
+  return out;
 }
 
 function resolveIndexBackend() {
@@ -212,28 +221,50 @@ function checkConfigFile() {
 }
 
 function checkModelCacheWritable() {
-  const cacheDir = resolveModelCacheDir();
-  const probePath = path.join(
-    cacheDir,
-    `.localnest-cache-probe-${process.pid}-${Date.now()}.tmp`
+  const localnestHome = resolveLocalnestHome(process.env);
+  const configCaches = parseConfigForModelCacheDirs();
+  const defaultCache = buildLocalnestPaths(localnestHome).dirs.cache;
+  const embedPreferred = path.resolve(
+    (process.env.LOCALNEST_EMBED_CACHE_DIR || '').trim() ||
+    configCaches.embeddingCacheDir ||
+    defaultCache
   );
-  try {
-    fs.mkdirSync(cacheDir, { recursive: true });
-    fs.writeFileSync(probePath, 'ok', 'utf8');
-    fs.rmSync(probePath, { force: true });
-    return {
-      id: 'model_cache',
-      ok: true,
-      detail: `Model cache writable (${cacheDir})`
-    };
-  } catch (error) {
+  const rerankerPreferred = path.resolve(
+    (process.env.LOCALNEST_RERANKER_CACHE_DIR || '').trim() ||
+    configCaches.rerankerCacheDir ||
+    defaultCache
+  );
+  const embedResolved = resolveWritableModelCacheDir({
+    preferredDir: embedPreferred,
+    localnestHome,
+    env: process.env
+  });
+  const rerankerResolved = resolveWritableModelCacheDir({
+    preferredDir: rerankerPreferred,
+    localnestHome,
+    env: process.env
+  });
+
+  if (!embedResolved.writable || !rerankerResolved.writable) {
     return {
       id: 'model_cache',
       ok: false,
-      detail: `Model cache not writable (${cacheDir}): ${error?.message || error}`,
+      detail: `Model cache not writable (embed preferred: ${embedPreferred}, reranker preferred: ${rerankerPreferred})`,
       fix: 'Set LOCALNEST_EMBED_CACHE_DIR/LOCALNEST_RERANKER_CACHE_DIR to a writable path, then re-run localnest setup.'
     };
   }
+
+  const details = [];
+  details.push(`embed=${embedResolved.path}`);
+  details.push(`reranker=${rerankerResolved.path}`);
+  if (embedResolved.fallbackUsed || rerankerResolved.fallbackUsed) {
+    details.push('fallback used for unwritable preferred path(s)');
+  }
+  return {
+    id: 'model_cache',
+    ok: true,
+    detail: `Model cache writable (${details.join(', ')})`
+  };
 }
 
 function printText(results) {

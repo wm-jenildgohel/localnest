@@ -83,6 +83,7 @@ localnest setup
 ```
 
 - Setup warms embedding/reranker models on first run (downloads into `~/.localnest/cache` by default).
+- If `~/.localnest/cache` is not writable, LocalNest automatically falls back to a per-user temp cache path.
 - If your environment is offline/restricted, skip warmup and run it later:
 
 ```bash

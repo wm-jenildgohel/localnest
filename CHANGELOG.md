@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### Model Download and Cache
 - Setup now warms embedding and reranker models on first run.
 - `doctor` now checks whether model cache is writable for the current user.
+- When default cache is not writable, LocalNest now auto-falls back to a user-specific temp cache directory.
 - If cache path is not writable, set:
   - `LOCALNEST_EMBED_CACHE_DIR`
   - `LOCALNEST_RERANKER_CACHE_DIR`

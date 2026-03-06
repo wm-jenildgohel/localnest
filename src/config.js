@@ -5,7 +5,8 @@ import { ensureConfigUpgraded } from './migrations/config-migrator.js';
 import {
   migrateLocalnestHomeLayout,
   resolveConfigPath as resolveDefaultConfigPath,
-  resolveLocalnestHome
+  resolveLocalnestHome,
+  resolveWritableModelCacheDir
 } from './home-layout.js';
 
 function parseBoolean(value, fallback) {
@@ -250,6 +251,34 @@ export function buildRuntimeConfig(env = process.env) {
     );
   }
   const fileSettings = parseConfigFileSettings(configPath);
+  const embeddingCachePreferred = path.resolve(
+    env.LOCALNEST_EMBED_CACHE_DIR || fileSettings.embeddingCacheDir || layout.dirs.cache
+  );
+  const rerankerCachePreferred = path.resolve(
+    env.LOCALNEST_RERANKER_CACHE_DIR || fileSettings.rerankerCacheDir || layout.dirs.cache
+  );
+  const embeddingCacheResolved = resolveWritableModelCacheDir({
+    preferredDir: embeddingCachePreferred,
+    localnestHome,
+    env
+  });
+  const rerankerCacheResolved = resolveWritableModelCacheDir({
+    preferredDir: rerankerCachePreferred,
+    localnestHome,
+    env
+  });
+
+  if (embeddingCacheResolved.fallbackUsed) {
+    process.stderr.write(
+      `[localnest-config] embedding cache fallback: ${embeddingCacheResolved.path} (preferred: ${embeddingCachePreferred})\n`
+    );
+  }
+  if (rerankerCacheResolved.fallbackUsed) {
+    process.stderr.write(
+      `[localnest-config] reranker cache fallback: ${rerankerCacheResolved.path} (preferred: ${rerankerCachePreferred})\n`
+    );
+  }
+
   return {
     localnestHome,
     mcpMode: (env.MCP_MODE || 'stdio').toLowerCase(),
@@ -293,9 +322,7 @@ export function buildRuntimeConfig(env = process.env) {
       env.LOCALNEST_EMBED_MODEL,
       fileSettings.embeddingModel || 'Xenova/all-MiniLM-L6-v2'
     ),
-    embeddingCacheDir: path.resolve(
-      env.LOCALNEST_EMBED_CACHE_DIR || fileSettings.embeddingCacheDir || layout.dirs.cache
-    ),
+    embeddingCacheDir: embeddingCacheResolved.path,
     embeddingDimensions: parseIntEnv(
       env.LOCALNEST_EMBED_DIMS,
       fileSettings.embeddingDimensions || 384
@@ -308,9 +335,7 @@ export function buildRuntimeConfig(env = process.env) {
       env.LOCALNEST_RERANKER_MODEL,
       fileSettings.rerankerModel || 'Xenova/ms-marco-MiniLM-L-6-v2'
     ),
-    rerankerCacheDir: path.resolve(
-      env.LOCALNEST_RERANKER_CACHE_DIR || fileSettings.rerankerCacheDir || layout.dirs.cache
-    ),
+    rerankerCacheDir: rerankerCacheResolved.path,
     updatePackageName: parseStringEnv(env.LOCALNEST_UPDATE_PACKAGE, 'localnest-mcp'),
     updateCheckIntervalMinutes: parseIntEnvClamped(
       env.LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES,

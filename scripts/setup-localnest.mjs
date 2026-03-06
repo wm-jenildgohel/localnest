@@ -6,7 +6,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { migrateLocalnestHomeLayout, resolveLocalnestHome } from '../src/home-layout.js';
+import { migrateLocalnestHomeLayout, resolveLocalnestHome, resolveWritableModelCacheDir } from '../src/home-layout.js';
 import { EmbeddingService } from '../src/services/embedding/service.js';
 import { RerankerService } from '../src/services/reranker/service.js';
 
@@ -226,6 +226,31 @@ function parseRootsFromJsonArg(rootsJsonArg) {
   return roots;
 }
 
+function resolveModelCacheDirs(preferredEmbedDir, preferredRerankerDir) {
+  const embed = resolveWritableModelCacheDir({
+    preferredDir: preferredEmbedDir,
+    localnestHome,
+    env: process.env
+  });
+  const reranker = resolveWritableModelCacheDir({
+    preferredDir: preferredRerankerDir,
+    localnestHome,
+    env: process.env
+  });
+
+  if (embed.fallbackUsed) {
+    console.log(`[setup] embedding cache fallback: ${embed.path} (preferred: ${embed.preferredPath})`);
+  }
+  if (reranker.fallbackUsed) {
+    console.log(`[setup] reranker cache fallback: ${reranker.path} (preferred: ${reranker.preferredPath})`);
+  }
+
+  return {
+    embeddingCacheDir: embed.path,
+    rerankerCacheDir: reranker.path
+  };
+}
+
 function saveOutputs(roots, packageRef, indexConfig) {
   fs.mkdirSync(layout.dirs.config, { recursive: true });
   fs.mkdirSync(layout.dirs.data, { recursive: true });
@@ -343,12 +368,16 @@ async function main() {
     const maxIndexedFiles = parseIntegerArg('max-indexed-files', 20000);
     const embeddingProvider = parseArg('embed-provider') || 'xenova';
     const embeddingModel = parseArg('embed-model') || 'Xenova/all-MiniLM-L6-v2';
-    const embeddingCacheDir = path.resolve(expandHome(parseArg('embed-cache-dir') || layout.dirs.cache));
+    const embedCachePreferred = path.resolve(expandHome(parseArg('embed-cache-dir') || layout.dirs.cache));
     const embeddingDimensions = parseIntegerArg('embed-dims', 384);
     const rerankerProvider = parseArg('reranker-provider') || 'xenova';
     const rerankerModel = parseArg('reranker-model') || 'Xenova/ms-marco-MiniLM-L-6-v2';
-    const rerankerCacheDir = path.resolve(expandHome(parseArg('reranker-cache-dir') || layout.dirs.cache));
+    const rerankerCachePreferred = path.resolve(expandHome(parseArg('reranker-cache-dir') || layout.dirs.cache));
     const skipModelDownload = parseBooleanArg('skip-model-download') ?? false;
+    const { embeddingCacheDir, rerankerCacheDir } = resolveModelCacheDirs(
+      embedCachePreferred,
+      rerankerCachePreferred
+    );
     const memoryEnabled = parseBooleanArg('memory-enabled') ?? false;
     const memoryBackend = parseArg('memory-backend') || 'auto';
     const memoryDbPath = path.resolve(expandHome(parseArg('memory-db-path') || defaultMemoryDbPath));
@@ -517,11 +546,15 @@ async function main() {
     const maxIndexedFiles = Number.parseInt(maxFilesInput || '20000', 10) || 20000;
     const embeddingProvider = 'xenova';
     const embeddingModel = 'Xenova/all-MiniLM-L6-v2';
-    const embeddingCacheDir = layout.dirs.cache;
+    const embedCachePreferred = layout.dirs.cache;
     const embeddingDimensions = 384;
     const rerankerProvider = 'xenova';
     const rerankerModel = 'Xenova/ms-marco-MiniLM-L-6-v2';
-    const rerankerCacheDir = layout.dirs.cache;
+    const rerankerCachePreferred = layout.dirs.cache;
+    const { embeddingCacheDir, rerankerCacheDir } = resolveModelCacheDirs(
+      embedCachePreferred,
+      rerankerCachePreferred
+    );
 
     console.log('');
     console.log('Local memory setup:');

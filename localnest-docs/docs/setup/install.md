@@ -105,6 +105,7 @@ After setup, copy `~/.localnest/config/mcp.localnest.json` into your MCP client 
 - Memory is opt-in. On Node 18/20, the rest of LocalNest still works, but memory remains unavailable.
 - `localnest-mcp-install-skill` is version-aware on this branch and skips reinstalling when the bundled skill is already current.
 - Setup warms embedding/reranker models on first run (downloads into `~/.localnest/cache` by default).
+- If `~/.localnest/cache` is not writable, LocalNest automatically falls back to a per-user temp cache path.
 - Run `localnest doctor --verbose` to confirm model cache writeability for the current user.
 - Offline/restricted environments can defer warmup with `localnest setup --skip-model-download=true`.
 - If the default model cache path is not writable, set `LOCALNEST_EMBED_CACHE_DIR` and `LOCALNEST_RERANKER_CACHE_DIR` to a user-writable directory before running setup.
