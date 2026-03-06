@@ -2,7 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.0.4-beta.5] - 2026-03-06
+
+### Upgrade Notes
+- Use `localnest upgrade` as the canonical upgrade command.
+- `localnest update` is removed in this version.
+- If this is the first run on a machine/user account, run:
+  - `localnest setup`
+  - `localnest doctor --verbose`
+
+### Model Download and Cache
+- Setup now warms embedding and reranker models on first run.
+- `doctor` now checks whether model cache is writable for the current user.
+- When default cache is not writable, LocalNest now auto-falls back to a user-specific temp cache directory.
+- If cache path is not writable, set:
+  - `LOCALNEST_EMBED_CACHE_DIR`
+  - `LOCALNEST_RERANKER_CACHE_DIR`
+- For offline or restricted environments:
+  - `localnest setup --skip-model-download=true`
+
+### User-Visible Changes
+- Cleaner upgrade validation and clearer upgrade error messages.
+- Faster search behavior (ripgrep context parsing and fallback line matching).
+- Docs updated and aligned to `0.0.4-beta.5` across release pages and install guidance.
+
+### Breaking/Removed
+- Removed deprecated `localnest update` alias.
+- Removed experimental backup sync CLI and Google Drive integration.
 
 ## [0.0.4-beta.4] - 2026-03-03
 

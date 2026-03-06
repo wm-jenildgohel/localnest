@@ -9,7 +9,7 @@ const skipReason = nodeMajor < 22 ? `node:sqlite requires Node 22+ (current: ${p
 
 const { buildBaseScopeClause, SqliteVecIndexService } = skipReason
   ? { buildBaseScopeClause: null, SqliteVecIndexService: null }
-  : await import('../src/services/sqlite-vec-index-service.js');
+  : await import('../src/services/sqlite-vec/service.js');
 
 test('buildBaseScopeClause handles slash and backslash descendants', { skip: skipReason }, () => {
   const bases = ['C:\\repo\\project', '/home/u/repo'];
@@ -23,7 +23,7 @@ test('buildBaseScopeClause handles slash and backslash descendants', { skip: ski
   assert.equal(scope.params[5], '/home/u/repo\\%');
 });
 
-test('sqlite index updates df/norm incrementally across reindex', { skip: skipReason }, () => {
+test('sqlite index updates df/norm incrementally across reindex', { skip: skipReason }, async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-sqlite-test-'));
   const dbPath = path.join(tempRoot, 'idx.db');
   const target = path.join(tempRoot, 'a.js');
@@ -50,8 +50,8 @@ test('sqlite index updates df/norm incrementally across reindex', { skip: skipRe
     maxIndexedFiles: 100
   });
 
-  service.indexProject({ projectPath: tempRoot, allRoots: false, force: false, maxFiles: 10 });
-  const fooBefore = service.semanticSearch({
+  await service.indexProject({ projectPath: tempRoot, allRoots: false, force: false, maxFiles: 10 });
+  const fooBefore = await service.semanticSearch({
     query: 'foo',
     projectPath: tempRoot,
     allRoots: false,
@@ -61,16 +61,16 @@ test('sqlite index updates df/norm incrementally across reindex', { skip: skipRe
   assert.ok(fooBefore.length > 0);
 
   fs.writeFileSync(target, 'const bar = 2;\nbar();\n', 'utf8');
-  service.indexProject({ projectPath: tempRoot, allRoots: false, force: false, maxFiles: 10 });
+  await service.indexProject({ projectPath: tempRoot, allRoots: false, force: false, maxFiles: 10 });
 
-  const fooAfter = service.semanticSearch({
+  const fooAfter = await service.semanticSearch({
     query: 'foo',
     projectPath: tempRoot,
     allRoots: false,
     maxResults: 5,
     minScore: 0
   });
-  const barAfter = service.semanticSearch({
+  const barAfter = await service.semanticSearch({
     query: 'bar',
     projectPath: tempRoot,
     allRoots: false,
@@ -113,6 +113,48 @@ test('sqlite index status reports extension as not configured when no extension 
   assert.equal(status.sqlite_vec_extension.configured, false);
   assert.equal(status.sqlite_vec_extension.attempted, false);
   assert.equal(status.sqlite_vec_extension.status, 'not-configured');
+
+  fs.rmSync(tempRoot, { recursive: true, force: true });
+});
+
+test('sqlite index BM25 fallback returns lexical semantic hit without embeddings', { skip: skipReason }, async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-sqlite-bm25-test-'));
+  const dbPath = path.join(tempRoot, 'idx.db');
+  const target = path.join(tempRoot, 'auth.js');
+
+  fs.writeFileSync(target, 'export const jwtGuard = () => true;', 'utf8');
+
+  const workspace = {
+    resolveSearchBases: () => [tempRoot],
+    normalizeTarget: (p) => p,
+    *walkDirectories(base) {
+      yield { files: [path.join(base, 'auth.js')] };
+    },
+    isLikelyTextFile: () => true,
+    safeReadText: (p) => fs.readFileSync(p, 'utf8')
+  };
+
+  const service = new SqliteVecIndexService({
+    workspace,
+    dbPath,
+    sqliteVecExtensionPath: '',
+    chunkLines: 20,
+    chunkOverlap: 5,
+    maxTermsPerChunk: 40,
+    maxIndexedFiles: 100
+  });
+
+  await service.indexProject({ projectPath: tempRoot, allRoots: false, force: false, maxFiles: 10 });
+  const out = await service.semanticSearch({
+    query: 'jwt guard',
+    projectPath: tempRoot,
+    allRoots: false,
+    maxResults: 5,
+    minScore: 0
+  });
+
+  assert.ok(out.length > 0);
+  assert.equal(out[0].file, target);
 
   fs.rmSync(tempRoot, { recursive: true, force: true });
 });

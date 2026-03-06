@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { UpdateService, compareVersions } from '../src/services/update-service.js';
+import { UpdateService, compareVersions } from '../src/services/update/service.js';
 import { buildLocalnestPaths } from '../src/home-layout.js';
 
 function makeTempHome() {

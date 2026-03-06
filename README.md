@@ -5,13 +5,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Quality](https://github.com/wmt-mobile/localnest/actions/workflows/quality.yml/badge.svg?branch=beta)](https://github.com/wmt-mobile/localnest/actions/workflows/quality.yml)
 [![CodeQL](https://github.com/wmt-mobile/localnest/actions/workflows/codeql.yml/badge.svg?branch=beta)](https://github.com/wmt-mobile/localnest/actions/workflows/codeql.yml)
-[![Socket Badge](https://badge.socket.dev/npm/package/localnest-mcp/0.0.4-beta.4)](https://badge.socket.dev/npm/package/localnest-mcp/0.0.4-beta.4)
+[![Socket Badge](https://badge.socket.dev/npm/package/localnest-mcp/0.0.4-beta.5)](https://badge.socket.dev/npm/package/localnest-mcp/0.0.4-beta.5)
 
 A local-first MCP server that gives AI agents safe access to your codebase, plus optional local memory and semantic indexing for high-quality retrieval.
 
 Documentation: https://wmt-mobile.github.io/localnest/
 
-Current beta package: `0.0.4-beta.4`
+Current beta package: `0.0.4-beta.5`
 
 Engineering docs for contributors:
 - [`guides/README.md`](./guides/README.md)
@@ -49,9 +49,8 @@ Install ripgrep:
 **Global install (recommended):**
 ```bash
 npm install -g localnest-mcp
-localnest-mcp-install-skill
-localnest-mcp-setup
-localnest-mcp-doctor
+localnest setup
+localnest doctor
 ```
 
 **npx fallback** (if global install is unavailable):
@@ -65,7 +64,38 @@ npx -y localnest-mcp-doctor
 Check the installed CLI version:
 
 ```bash
-localnest-mcp --version
+localnest version
+```
+
+Upgrade command:
+
+```bash
+localnest upgrade
+localnest upgrade 0.0.4-beta.5
+localnest upgrade install 0.0.4-beta.5
+```
+
+Model download readiness (recommended per user account):
+
+```bash
+localnest doctor --verbose
+localnest setup
+```
+
+- Setup warms embedding/reranker models on first run (downloads into `~/.localnest/cache` by default).
+- If `~/.localnest/cache` is not writable, LocalNest automatically falls back to a per-user temp cache path.
+- If your environment is offline/restricted, skip warmup and run it later:
+
+```bash
+localnest setup --skip-model-download=true
+```
+
+- If default cache path is not writable, set a user-writable cache path before setup:
+
+```bash
+export LOCALNEST_EMBED_CACHE_DIR="$HOME/.cache/localnest-models"
+export LOCALNEST_RERANKER_CACHE_DIR="$HOME/.cache/localnest-models"
+localnest setup
 ```
 
 ## MCP Client Configuration
@@ -132,6 +162,8 @@ startup_timeout_sec = 30
 | `localnest_search_files` | File/path name search (best first step for module/feature discovery) |
 | `localnest_search_code` | Lexical search (exact symbols, regex, identifiers) |
 | `localnest_search_hybrid` | Hybrid search (lexical + semantic, RRF-ranked) |
+| `localnest_get_symbol` | Find likely definition/export locations for a symbol |
+| `localnest_find_usages` | Find import and call-site usages for a symbol |
 | `localnest_read_file` | Read a bounded line window from a file |
 | `localnest_summarize_project` | Language/extension breakdown for a project |
 
@@ -140,11 +172,20 @@ Only canonical `localnest_*` tool names are exposed (no short aliases) to keep M
 
 **List tools** return pagination fields: `total_count`, `count`, `limit`, `offset`, `has_more`, `next_offset`, `items`.
 
-**Recommended agent workflow:**
+**Fast agent workflow (recommended default):**
+```text
+localnest_search_files (max_results: 20-30)
+→ localnest_search_code (project_path + glob + max_results: 20-40 + context_lines: 2)
+→ localnest_read_file (top 1-3 hits)
 ```
-localnest_server_status → localnest_task_context → localnest_update_status → localnest_list_roots → localnest_list_projects
-→ localnest_index_status → localnest_index_project
-→ localnest_search_hybrid → localnest_read_file
+
+Use `localnest_search_hybrid` only when lexical search misses or you need concept-level retrieval. Keep `use_reranker=false` unless you need a final precision pass.
+
+**Deep-task workflow (debug/refactor/review):**
+```text
+localnest_server_status → localnest_task_context → localnest_index_status
+→ localnest_search_hybrid (optionally use_reranker=true)
+→ localnest_read_file
 → localnest_capture_outcome
 ```
 
@@ -156,6 +197,12 @@ Choose during setup or via env var:
 |---|---|
 | `sqlite-vec` | Recommended. Persistent SQLite DB, efficient for large repos. Requires Node 22+. |
 | `json` | Compatibility fallback for older Node runtimes. Auto-selected if sqlite-vec is unavailable. |
+
+`localnest_index_status` and `localnest_server_status` now expose:
+- `upgrade_recommended`
+- `upgrade_reason`
+
+When `backend=json` and `upgrade_recommended=true`, migrate to `sqlite-vec` for production-scale indexing.
 
 ## Configuration Reference
 
@@ -189,6 +236,13 @@ This keeps the LocalNest home directory readable:
 | `LOCALNEST_VECTOR_CHUNK_OVERLAP` | `15` | Overlap between chunks |
 | `LOCALNEST_VECTOR_MAX_TERMS` | `80` | Max terms per chunk |
 | `LOCALNEST_VECTOR_MAX_FILES` | `20000` | Max files per index run |
+| `LOCALNEST_EMBED_PROVIDER` | `xenova` | Embedding backend |
+| `LOCALNEST_EMBED_MODEL` | `Xenova/all-MiniLM-L6-v2` | Embedding model |
+| `LOCALNEST_EMBED_CACHE_DIR` | `~/.localnest/cache` | Embedding model cache path |
+| `LOCALNEST_EMBED_DIMS` | `384` | Embedding vector dimensions |
+| `LOCALNEST_RERANKER_PROVIDER` | `xenova` | Reranker backend |
+| `LOCALNEST_RERANKER_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | Cross-encoder reranker model |
+| `LOCALNEST_RERANKER_CACHE_DIR` | `~/.localnest/cache` | Reranker model cache path |
 | `LOCALNEST_MEMORY_ENABLED` | `false` | Enable local memory subsystem |
 | `LOCALNEST_MEMORY_BACKEND` | `auto` | `auto`, `node-sqlite`, or `sqlite3` |
 | `LOCALNEST_MEMORY_DB_PATH` | `~/.localnest/data/localnest.memory.db` | SQLite memory database path |
@@ -198,9 +252,15 @@ This keeps the LocalNest home directory readable:
 | `LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES` | `120` | Refresh interval for npm update checks |
 | `LOCALNEST_UPDATE_FAILURE_BACKOFF_MINUTES` | `15` | Retry interval when npm check fails |
 
+Performance tips:
+- Keep retrieval scoped with `project_path` and a narrow `glob` whenever possible.
+- Keep `max_results` small first (20-40), then widen only when needed.
+- Keep reranking off by default and enable it only for final answer quality on ambiguous queries.
+- Avoid indexing all roots for one-off tasks; prefer project-scoped indexing.
+
 ## Local Memory
 
-Memory is opt-in during `localnest-mcp-setup`. When enabled, LocalNest stores durable project knowledge and preferences in a local SQLite database.
+Memory is opt-in during `localnest setup`. When enabled, LocalNest stores durable project knowledge and preferences in a local SQLite database.
 
 - Memory currently requires Node 22.13+ for built-in `node:sqlite`
 - Node 18/20 continue to support the rest of LocalNest, but memory stays unavailable on those runtimes
@@ -250,6 +310,7 @@ Both commands also accept JSON on stdin.
 ```bash
 npx skills add https://github.com/wmt-mobile/localnest --skill localnest-mcp
 ```
+
 
 ## Contributing
 

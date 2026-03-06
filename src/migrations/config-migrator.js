@@ -26,7 +26,14 @@ function defaultIndex(localnestHome) {
     chunkLines: 60,
     chunkOverlap: 15,
     maxTermsPerChunk: 80,
-    maxIndexedFiles: 20000
+    maxIndexedFiles: 20000,
+    embeddingProvider: 'xenova',
+    embeddingModel: 'Xenova/all-MiniLM-L6-v2',
+    embeddingCacheDir: layout.dirs.cache,
+    embeddingDimensions: 384,
+    rerankerProvider: 'xenova',
+    rerankerModel: 'Xenova/ms-marco-MiniLM-L-6-v2',
+    rerankerCacheDir: layout.dirs.cache
   };
 }
 
@@ -78,8 +85,8 @@ export function ensureConfigUpgraded({ configPath, localnestHome }) {
     }
   }
 
-  if (currentVersion < 3) {
-    parsed.version = 3;
+  if (currentVersion < 4) {
+    parsed.version = 4;
     changed = true;
   }
 

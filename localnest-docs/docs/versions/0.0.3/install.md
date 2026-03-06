@@ -23,7 +23,7 @@ Install ripgrep:
 ## Global install
 
 ```bash
-npm install -g localnest-mcp
+npm install -g localnest-mcp@0.0.3
 localnest-mcp-install-skill
 localnest-mcp-setup
 localnest-mcp-doctor
@@ -64,3 +64,4 @@ npx -y localnest-mcp-doctor
 - global install is the preferred path in `0.0.3`
 - setup writes both `localnest.config.json` and `mcp.localnest.json`
 - Windows users should use the generated `npx.cmd` command from setup output
+- use [/docs/releases/version-selection](/docs/releases/version-selection) to choose another version line

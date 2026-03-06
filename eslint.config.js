@@ -7,6 +7,8 @@ export default [
       'node_modules/**',
       '.npm-cache/**',
       '.localnest/**',
+      '.claude/**',
+      '.claude-flow/**',
       'coverage/**',
       'build/**',
       '.docusaurus/**',

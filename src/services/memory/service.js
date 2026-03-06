@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MemoryStore } from './memory-store.js';
+import { MemoryStore } from './store.js';
 
 function parseNodeMajor(version) {
   const major = Number.parseInt(String(version || '').split('.')[0] || '0', 10);
@@ -14,7 +14,8 @@ export class MemoryService {
     backend,
     dbPath,
     autoCapture,
-    consentDone
+    consentDone,
+    embeddingService
   }) {
     this.localnestHome = localnestHome;
     this.enabled = enabled;
@@ -25,7 +26,8 @@ export class MemoryService {
     this.store = new MemoryStore({
       enabled,
       backend,
-      dbPath
+      dbPath,
+      embeddingService: embeddingService || null
     });
   }
 
@@ -137,6 +139,26 @@ export class MemoryService {
   async listEvents(args = {}) {
     this.assertEnabled();
     return this.store.listEvents(args);
+  }
+
+  async suggestRelations(memoryId, options = {}) {
+    this.assertEnabled();
+    return this.store.suggestRelations(memoryId, options);
+  }
+
+  async addRelation(sourceId, targetId, relationType = 'related') {
+    this.assertEnabled();
+    return this.store.addRelation(sourceId, targetId, relationType);
+  }
+
+  async removeRelation(sourceId, targetId) {
+    this.assertEnabled();
+    return this.store.removeRelation(sourceId, targetId);
+  }
+
+  async getRelated(memoryId) {
+    this.assertEnabled();
+    return this.store.getRelated(memoryId);
   }
 
   assertEnabled() {

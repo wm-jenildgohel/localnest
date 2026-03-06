@@ -201,4 +201,81 @@ export function registerMemoryStoreTools({
       offset
     })
   );
+
+  registerJsonTool(
+    ['localnest_memory_suggest_relations'],
+    {
+      title: 'Memory Suggest Relations',
+      description: 'Find semantically similar memory entries that could be linked to a given memory. Uses dense embeddings (all-MiniLM-L6-v2) when available, falls back to token overlap. Returns candidates ranked by similarity without creating any relations — use localnest_memory_add_relation to confirm.',
+      inputSchema: {
+        id: z.string().min(1),
+        threshold: z.number().min(0).max(1).default(0.55),
+        max_results: z.number().int().min(1).max(50).default(10)
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ id, threshold, max_results }) => memory.suggestRelations(id, { threshold, maxResults: max_results })
+  );
+
+  registerJsonTool(
+    ['localnest_memory_add_relation'],
+    {
+      title: 'Memory Add Relation',
+      description: 'Link two memory entries with a named relation. Use to build a traversable knowledge graph (e.g. "depends_on", "contradicts", "supersedes", "related").',
+      inputSchema: {
+        source_id: z.string().min(1),
+        target_id: z.string().min(1),
+        relation_type: z.string().min(1).max(60).default('related')
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ source_id, target_id, relation_type }) => memory.addRelation(source_id, target_id, relation_type)
+  );
+
+  registerJsonTool(
+    ['localnest_memory_remove_relation'],
+    {
+      title: 'Memory Remove Relation',
+      description: 'Remove a relation between two memory entries.',
+      inputSchema: {
+        source_id: z.string().min(1),
+        target_id: z.string().min(1)
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ source_id, target_id }) => memory.removeRelation(source_id, target_id)
+  );
+
+  registerJsonTool(
+    ['localnest_memory_related'],
+    {
+      title: 'Memory Related',
+      description: 'Return all memory entries linked to a given memory ID, traversing the knowledge graph one hop in both directions.',
+      inputSchema: {
+        id: z.string().min(1)
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ id }) => memory.getRelated(id)
+  );
 }

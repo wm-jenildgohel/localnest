@@ -6,7 +6,9 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { migrateLocalnestHomeLayout, resolveLocalnestHome } from '../src/home-layout.js';
+import { migrateLocalnestHomeLayout, resolveLocalnestHome, resolveWritableModelCacheDir } from '../src/home-layout.js';
+import { EmbeddingService } from '../src/services/embedding/service.js';
+import { RerankerService } from '../src/services/reranker/service.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -112,6 +114,13 @@ function buildClientSnippet(packageRef, indexConfig) {
           LOCALNEST_INDEX_BACKEND: indexConfig.backend,
           LOCALNEST_DB_PATH: indexConfig.dbPath,
           LOCALNEST_INDEX_PATH: indexConfig.indexPath,
+          LOCALNEST_EMBED_PROVIDER: indexConfig.embedding.provider,
+          LOCALNEST_EMBED_MODEL: indexConfig.embedding.model,
+          LOCALNEST_EMBED_CACHE_DIR: indexConfig.embedding.cacheDir,
+          LOCALNEST_EMBED_DIMS: String(indexConfig.embedding.dimensions),
+          LOCALNEST_RERANKER_PROVIDER: indexConfig.reranker.provider,
+          LOCALNEST_RERANKER_MODEL: indexConfig.reranker.model,
+          LOCALNEST_RERANKER_CACHE_DIR: indexConfig.reranker.cacheDir,
           LOCALNEST_MEMORY_ENABLED: String(indexConfig.memory.enabled),
           LOCALNEST_MEMORY_BACKEND: indexConfig.memory.backend,
           LOCALNEST_MEMORY_DB_PATH: indexConfig.memory.dbPath
@@ -133,6 +142,13 @@ function buildGlobalClientSnippet(indexConfig) {
           LOCALNEST_INDEX_BACKEND: indexConfig.backend,
           LOCALNEST_DB_PATH: indexConfig.dbPath,
           LOCALNEST_INDEX_PATH: indexConfig.indexPath,
+          LOCALNEST_EMBED_PROVIDER: indexConfig.embedding.provider,
+          LOCALNEST_EMBED_MODEL: indexConfig.embedding.model,
+          LOCALNEST_EMBED_CACHE_DIR: indexConfig.embedding.cacheDir,
+          LOCALNEST_EMBED_DIMS: String(indexConfig.embedding.dimensions),
+          LOCALNEST_RERANKER_PROVIDER: indexConfig.reranker.provider,
+          LOCALNEST_RERANKER_MODEL: indexConfig.reranker.model,
+          LOCALNEST_RERANKER_CACHE_DIR: indexConfig.reranker.cacheDir,
           LOCALNEST_MEMORY_ENABLED: String(indexConfig.memory.enabled),
           LOCALNEST_MEMORY_BACKEND: indexConfig.memory.backend,
           LOCALNEST_MEMORY_DB_PATH: indexConfig.memory.dbPath
@@ -147,6 +163,25 @@ function parseArg(name) {
   const item = argv.find((a) => a.startsWith(long));
   if (!item) return null;
   return item.slice(long.length).trim();
+}
+
+function parseBooleanArg(name) {
+  const raw = parseArg(name);
+  if (raw === null) return null;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'y') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'n') return false;
+  throw new Error(`Invalid boolean for --${name}: ${raw}`);
+}
+
+function parseIntegerArg(name, fallback) {
+  const raw = parseArg(name);
+  if (raw === null || raw === '') return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid integer for --${name}: ${raw}`);
+  }
+  return parsed;
 }
 
 function parseRootsFromPathsArg(pathsArg) {
@@ -164,6 +199,58 @@ function parseRootsFromPathsArg(pathsArg) {
   return roots;
 }
 
+function parseRootsFromJsonArg(rootsJsonArg) {
+  if (!rootsJsonArg) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(rootsJsonArg);
+  } catch {
+    throw new Error('Invalid JSON provided in --roots-json');
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('--roots-json must be a JSON array');
+  }
+
+  const roots = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
+    if (typeof item.path !== 'string' || item.path.trim() === '') continue;
+    const resolved = path.resolve(expandHome(item.path.trim()));
+    if (!isDir(resolved)) continue;
+    const label = typeof item.label === 'string' && item.label.trim()
+      ? item.label.trim()
+      : toLabel(resolved, `root${roots.length + 1}`);
+    roots.push({ label, path: resolved });
+  }
+
+  return roots;
+}
+
+function resolveModelCacheDirs(preferredEmbedDir, preferredRerankerDir) {
+  const embed = resolveWritableModelCacheDir({
+    preferredDir: preferredEmbedDir,
+    localnestHome,
+    env: process.env
+  });
+  const reranker = resolveWritableModelCacheDir({
+    preferredDir: preferredRerankerDir,
+    localnestHome,
+    env: process.env
+  });
+
+  if (embed.fallbackUsed) {
+    console.log('[setup] embedding cache fallback enabled due to unwritable preferred cache path');
+  }
+  if (reranker.fallbackUsed) {
+    console.log('[setup] reranker cache fallback enabled due to unwritable preferred cache path');
+  }
+
+  return {
+    embeddingCacheDir: embed.path,
+    rerankerCacheDir: reranker.path
+  };
+}
+
 function saveOutputs(roots, packageRef, indexConfig) {
   fs.mkdirSync(layout.dirs.config, { recursive: true });
   fs.mkdirSync(layout.dirs.data, { recursive: true });
@@ -171,7 +258,7 @@ function saveOutputs(roots, packageRef, indexConfig) {
   fs.mkdirSync(layout.dirs.backups, { recursive: true });
   const config = {
     name: 'localnest',
-    version: 3,
+    version: 4,
     updatedAt: new Date().toISOString(),
     roots,
     index: {
@@ -181,7 +268,14 @@ function saveOutputs(roots, packageRef, indexConfig) {
       chunkLines: indexConfig.chunkLines,
       chunkOverlap: indexConfig.chunkOverlap,
       maxTermsPerChunk: indexConfig.maxTermsPerChunk,
-      maxIndexedFiles: indexConfig.maxIndexedFiles
+      maxIndexedFiles: indexConfig.maxIndexedFiles,
+      embeddingProvider: indexConfig.embedding.provider,
+      embeddingModel: indexConfig.embedding.model,
+      embeddingCacheDir: indexConfig.embedding.cacheDir,
+      embeddingDimensions: indexConfig.embedding.dimensions,
+      rerankerProvider: indexConfig.reranker.provider,
+      rerankerModel: indexConfig.reranker.model,
+      rerankerCacheDir: indexConfig.reranker.cacheDir
     },
     memory: {
       enabled: indexConfig.memory.enabled,
@@ -194,6 +288,36 @@ function saveOutputs(roots, packageRef, indexConfig) {
 
   fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   fs.writeFileSync(snippetPath, `${JSON.stringify(buildClientSnippet(packageRef, indexConfig), null, 2)}\n`, 'utf8');
+}
+
+async function warmupModels(indexConfig) {
+  if (indexConfig?.embedding?.provider && indexConfig.embedding.provider !== 'none') {
+    process.stdout.write('[setup] warming up embedding model (first run downloads model files)...\n');
+    try {
+      const embedding = new EmbeddingService({
+        provider: indexConfig.embedding.provider,
+        model: indexConfig.embedding.model,
+        cacheDir: indexConfig.embedding.cacheDir
+      });
+      await embedding.embed('localnest embedding warmup');
+    } catch (error) {
+      process.stderr.write(`[setup] warning: embedding warmup failed: ${error?.message || error}\n`);
+    }
+  }
+
+  if (indexConfig?.reranker?.provider && indexConfig.reranker.provider !== 'none') {
+    process.stdout.write('[setup] warming up reranker model (first run downloads model files)...\n');
+    try {
+      const reranker = new RerankerService({
+        provider: indexConfig.reranker.provider,
+        model: indexConfig.reranker.model,
+        cacheDir: indexConfig.reranker.cacheDir
+      });
+      await reranker.score('warmup query', 'warmup candidate');
+    } catch (error) {
+      process.stderr.write(`[setup] warning: reranker warmup failed: ${error?.message || error}\n`);
+    }
+  }
 }
 
 function printSuccess(packageRef, indexConfig) {
@@ -227,38 +351,102 @@ async function main() {
     process.exit(1);
   }
 
+  const rootsJsonArg = parseArg('roots-json');
   const pathsArg = parseArg('paths');
-  if (pathsArg) {
-    const roots = parseRootsFromPathsArg(pathsArg);
+  if (pathsArg || rootsJsonArg) {
+    const roots = rootsJsonArg ? parseRootsFromJsonArg(rootsJsonArg) : parseRootsFromPathsArg(pathsArg);
     if (roots.length === 0) {
-      throw new Error('No valid directories provided in --paths');
+      throw new Error('No valid directories provided in --paths/--roots-json');
     }
+
+    const backend = parseArg('index-backend') || 'sqlite-vec';
+    const dbPath = path.resolve(expandHome(parseArg('db-path') || defaultDbPath));
+    const indexPath = path.resolve(expandHome(parseArg('index-path') || defaultJsonIndexPath));
+    const chunkLines = parseIntegerArg('chunk-lines', 60);
+    const chunkOverlap = parseIntegerArg('chunk-overlap', 15);
+    const maxTermsPerChunk = parseIntegerArg('max-terms-per-chunk', 80);
+    const maxIndexedFiles = parseIntegerArg('max-indexed-files', 20000);
+    const embeddingProvider = parseArg('embed-provider') || 'xenova';
+    const embeddingModel = parseArg('embed-model') || 'Xenova/all-MiniLM-L6-v2';
+    const embedCachePreferred = path.resolve(expandHome(parseArg('embed-cache-dir') || layout.dirs.cache));
+    const embeddingDimensions = parseIntegerArg('embed-dims', 384);
+    const rerankerProvider = parseArg('reranker-provider') || 'xenova';
+    const rerankerModel = parseArg('reranker-model') || 'Xenova/ms-marco-MiniLM-L-6-v2';
+    const rerankerCachePreferred = path.resolve(expandHome(parseArg('reranker-cache-dir') || layout.dirs.cache));
+    const skipModelDownload = parseBooleanArg('skip-model-download') ?? false;
+    const { embeddingCacheDir, rerankerCacheDir } = resolveModelCacheDirs(
+      embedCachePreferred,
+      rerankerCachePreferred
+    );
+    const memoryEnabled = parseBooleanArg('memory-enabled') ?? false;
+    const memoryBackend = parseArg('memory-backend') || 'auto';
+    const memoryDbPath = path.resolve(expandHome(parseArg('memory-db-path') || defaultMemoryDbPath));
+    const memoryAutoCapture = parseBooleanArg('memory-auto-capture') ?? memoryEnabled;
+    const memoryConsentDone = parseBooleanArg('memory-consent-done') ?? false;
+
     saveOutputs(roots, packageRef, {
-      backend: 'sqlite-vec',
-      dbPath: defaultDbPath,
-      indexPath: defaultJsonIndexPath,
-      chunkLines: 60,
-      chunkOverlap: 15,
-      maxTermsPerChunk: 80,
-      maxIndexedFiles: 20000,
+      backend,
+      dbPath,
+      indexPath,
+      chunkLines,
+      chunkOverlap,
+      maxTermsPerChunk,
+      maxIndexedFiles,
+      embedding: {
+        provider: embeddingProvider,
+        model: embeddingModel,
+        cacheDir: embeddingCacheDir,
+        dimensions: embeddingDimensions
+      },
+      reranker: {
+        provider: rerankerProvider,
+        model: rerankerModel,
+        cacheDir: rerankerCacheDir
+      },
       memory: {
-        enabled: false,
-        backend: 'auto',
-        dbPath: defaultMemoryDbPath,
-        autoCapture: false,
-        askForConsentDone: false
+        enabled: memoryEnabled,
+        backend: memoryBackend,
+        dbPath: memoryDbPath,
+        autoCapture: memoryAutoCapture,
+        askForConsentDone: memoryConsentDone
       }
     });
     printSuccess(packageRef, {
-      backend: 'sqlite-vec',
-      dbPath: defaultDbPath,
-      indexPath: defaultJsonIndexPath,
+      backend,
+      dbPath,
+      indexPath,
+      embedding: {
+        provider: embeddingProvider,
+        model: embeddingModel,
+        cacheDir: embeddingCacheDir,
+        dimensions: embeddingDimensions
+      },
+      reranker: {
+        provider: rerankerProvider,
+        model: rerankerModel,
+        cacheDir: rerankerCacheDir
+      },
       memory: {
-        enabled: false,
-        backend: 'auto',
-        dbPath: defaultMemoryDbPath
+        enabled: memoryEnabled,
+        backend: memoryBackend,
+        dbPath: memoryDbPath
       }
     });
+    if (!skipModelDownload) {
+      await warmupModels({
+        embedding: {
+          provider: embeddingProvider,
+          model: embeddingModel,
+          cacheDir: embeddingCacheDir,
+          dimensions: embeddingDimensions
+        },
+        reranker: {
+          provider: rerankerProvider,
+          model: rerankerModel,
+          cacheDir: rerankerCacheDir
+        }
+      });
+    }
     return;
   }
 
@@ -268,7 +456,9 @@ async function main() {
     console.log('Usage:');
     console.log('  npm run setup');
     console.log('  npm run setup -- --paths="/abs/path1,/abs/path2"');
+    console.log('  npm run setup -- --roots-json=\'[{"label":"repo","path":"/abs/repo"}]\'');
     console.log('  npm run setup -- --package="localnest-mcp"');
+    console.log('  npm run setup -- --skip-model-download=true');
     return;
   }
 
@@ -354,6 +544,17 @@ async function main() {
     const chunkOverlap = Number.parseInt(chunkOverlapInput || '15', 10) || 15;
     const maxTermsPerChunk = Number.parseInt(maxTermsInput || '80', 10) || 80;
     const maxIndexedFiles = Number.parseInt(maxFilesInput || '20000', 10) || 20000;
+    const embeddingProvider = 'xenova';
+    const embeddingModel = 'Xenova/all-MiniLM-L6-v2';
+    const embedCachePreferred = layout.dirs.cache;
+    const embeddingDimensions = 384;
+    const rerankerProvider = 'xenova';
+    const rerankerModel = 'Xenova/ms-marco-MiniLM-L-6-v2';
+    const rerankerCachePreferred = layout.dirs.cache;
+    const { embeddingCacheDir, rerankerCacheDir } = resolveModelCacheDirs(
+      embedCachePreferred,
+      rerankerCachePreferred
+    );
 
     console.log('');
     console.log('Local memory setup:');
@@ -373,6 +574,17 @@ async function main() {
       chunkOverlap,
       maxTermsPerChunk,
       maxIndexedFiles,
+      embedding: {
+        provider: embeddingProvider,
+        model: embeddingModel,
+        cacheDir: embeddingCacheDir,
+        dimensions: embeddingDimensions
+      },
+      reranker: {
+        provider: rerankerProvider,
+        model: rerankerModel,
+        cacheDir: rerankerCacheDir
+      },
       memory: {
         enabled: memoryEnabled,
         backend: 'auto',
@@ -385,10 +597,34 @@ async function main() {
       backend,
       dbPath,
       indexPath,
+      embedding: {
+        provider: embeddingProvider,
+        model: embeddingModel,
+        cacheDir: embeddingCacheDir,
+        dimensions: embeddingDimensions
+      },
+      reranker: {
+        provider: rerankerProvider,
+        model: rerankerModel,
+        cacheDir: rerankerCacheDir
+      },
       memory: {
         enabled: memoryEnabled,
         backend: 'auto',
         dbPath: memoryDbPath
+      }
+    });
+    await warmupModels({
+      embedding: {
+        provider: embeddingProvider,
+        model: embeddingModel,
+        cacheDir: embeddingCacheDir,
+        dimensions: embeddingDimensions
+      },
+      reranker: {
+        provider: rerankerProvider,
+        model: rerankerModel,
+        cacheDir: rerankerCacheDir
       }
     });
   } finally {

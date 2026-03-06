@@ -3,10 +3,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SearchService } from '../src/services/search-service.js';
-import { SqliteVecIndexService } from '../src/services/sqlite-vec-index-service.js';
-import { VectorIndexService } from '../src/services/vector-index-service.js';
-import { MemoryStore } from '../src/services/memory-store.js';
+import { performance } from 'node:perf_hooks';
+import { SearchService } from '../src/services/search/service.js';
+import { SqliteVecIndexService } from '../src/services/sqlite-vec/service.js';
+import { VectorIndexService } from '../src/services/vector-index/service.js';
+import { MemoryStore } from '../src/services/memory/store.js';
+import { EmbeddingService } from '../src/services/embedding/service.js';
+import { AstChunker } from '../src/services/chunker/service.js';
+import { RerankerService } from '../src/services/reranker/service.js';
 
 function createWorkspace(project) {
   return {
@@ -76,14 +80,17 @@ function buildSearchFixture(project) {
   }
 }
 
-function runSearchSuite(label, workspace, project, vectorIndex) {
+async function runSearchSuite({ label, workspace, project, vectorIndex, reranker, useReranker, repeats }) {
   const search = new SearchService({
     workspace,
     ignoreDirs: new Set(['node_modules', '.git']),
     hasRipgrep: true,
     rgTimeoutMs: 5000,
     maxFileBytes: 512 * 1024,
-    vectorIndex
+    vectorIndex,
+    reranker,
+    rerankerMinCandidates: 1,
+    rerankerTopN: 10
   });
 
   const queries = [
@@ -93,11 +100,13 @@ function runSearchSuite(label, workspace, project, vectorIndex) {
     'how to cook pasta with basil'
   ];
 
-  return {
-    label,
-    backend: vectorIndex.getStatus(),
-    results: queries.map((query) => {
-      const hybrid = search.searchHybrid({
+  const durations = [];
+  const startedAt = performance.now();
+  const results = [];
+  for (let r = 0; r < repeats; r += 1) {
+    for (const query of queries) {
+      const qStart = performance.now();
+      const hybrid = await search.searchHybrid({
         query,
         projectPath: project,
         allRoots: false,
@@ -105,20 +114,49 @@ function runSearchSuite(label, workspace, project, vectorIndex) {
         maxResults: 5,
         caseSensitive: false,
         minSemanticScore: 0.01,
-        autoIndex: false
+        autoIndex: false,
+        useReranker
       });
-
-      return {
+      const qMs = performance.now() - qStart;
+      durations.push(qMs);
+      results.push({
         query,
+        run: r + 1,
+        duration_ms: Number(qMs.toFixed(2)),
         lexical_hits: hybrid.lexical_hits,
         semantic_hits: hybrid.semantic_hits,
         ranking_mode: hybrid.ranking_mode,
+        reranker: hybrid.reranker,
         top_type: hybrid.results[0]?.type || null,
         top_file: hybrid.results[0]?.file || null,
         top_rrf: hybrid.results[0]?.rrf_score || null,
+        top_final: hybrid.results[0]?.final_score || null,
+        top_reranker: hybrid.results[0]?.reranker_score || null,
         top_semantic_raw: hybrid.results[0]?.semantic_score_raw || null
-      };
-    })
+      });
+    }
+  }
+
+  const totalMs = performance.now() - startedAt;
+  const count = durations.length || 1;
+  const sorted = [...durations].sort((a, b) => a - b);
+  const p50 = sorted[Math.floor(0.5 * (count - 1))] || 0;
+  const p95 = sorted[Math.floor(0.95 * (count - 1))] || 0;
+  const avg = durations.reduce((sum, v) => sum + v, 0) / count;
+
+  return {
+    label,
+    backend: vectorIndex.getStatus(),
+    benchmark: {
+      use_reranker: useReranker,
+      repeats,
+      total_queries: durations.length,
+      total_ms: Number(totalMs.toFixed(2)),
+      avg_ms: Number(avg.toFixed(2)),
+      p50_ms: Number(p50.toFixed(2)),
+      p95_ms: Number(p95.toFixed(2))
+    },
+    results
   };
 }
 
@@ -228,6 +266,20 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-stress-'));
   const project = path.join(root, 'app');
   fs.mkdirSync(project, { recursive: true });
+  const useEmbeddings = String(process.env.LOCALNEST_STRESS_EMBED || '').toLowerCase() === 'true';
+  const useReranker = String(process.env.LOCALNEST_STRESS_RERANKER || '').toLowerCase() === 'true';
+  const repeats = Math.max(1, Number.parseInt(process.env.LOCALNEST_STRESS_REPEATS || '3', 10) || 3);
+  const embeddingService = new EmbeddingService({
+    provider: useEmbeddings ? 'xenova' : 'none',
+    model: process.env.LOCALNEST_STRESS_EMBED_MODEL || 'Xenova/all-MiniLM-L6-v2',
+    cacheDir: process.env.LOCALNEST_STRESS_EMBED_CACHE_DIR || path.join(root, '.cache')
+  });
+  const astChunker = new AstChunker();
+  const reranker = new RerankerService({
+    provider: useReranker ? 'xenova' : 'none',
+    model: process.env.LOCALNEST_STRESS_RERANKER_MODEL || 'Xenova/ms-marco-MiniLM-L-6-v2',
+    cacheDir: process.env.LOCALNEST_STRESS_RERANKER_CACHE_DIR || path.join(root, '.cache')
+  });
 
   try {
     buildSearchFixture(project);
@@ -240,9 +292,13 @@ async function main() {
       chunkLines: 20,
       chunkOverlap: 5,
       maxTermsPerChunk: 80,
-      maxIndexedFiles: 1000
+      maxIndexedFiles: 1000,
+      embeddingService,
+      astChunker
     });
-    sqliteIndex.indexProject({ projectPath: project, allRoots: false, force: true, maxFiles: 1000 });
+    const sqliteIndexStart = performance.now();
+    await sqliteIndex.indexProject({ projectPath: project, allRoots: false, force: true, maxFiles: 1000 });
+    const sqliteIndexMs = performance.now() - sqliteIndexStart;
 
     const jsonIndex = new VectorIndexService({
       workspace,
@@ -250,17 +306,49 @@ async function main() {
       chunkLines: 20,
       chunkOverlap: 5,
       maxTermsPerChunk: 80,
-      maxIndexedFiles: 1000
+      maxIndexedFiles: 1000,
+      embeddingService,
+      astChunker
     });
-    jsonIndex.indexProject({ projectPath: project, allRoots: false, force: true, maxFiles: 1000 });
+    const jsonIndexStart = performance.now();
+    await jsonIndex.indexProject({ projectPath: project, allRoots: false, force: true, maxFiles: 1000 });
+    const jsonIndexMs = performance.now() - jsonIndexStart;
 
     const report = {
+      benchmark_meta: {
+        use_embeddings: useEmbeddings,
+        use_reranker: useReranker,
+        repeats
+      },
+      indexing: {
+        sqlite_ms: Number(sqliteIndexMs.toFixed(2)),
+        json_ms: Number(jsonIndexMs.toFixed(2))
+      },
       search: {
-        sqlite: runSearchSuite('sqlite', workspace, project, sqliteIndex),
-        json: runSearchSuite('json', workspace, project, jsonIndex)
+        sqlite: runSearchSuite({
+          label: 'sqlite',
+          workspace,
+          project,
+          vectorIndex: sqliteIndex,
+          reranker,
+          useReranker,
+          repeats
+        }),
+        json: runSearchSuite({
+          label: 'json',
+          workspace,
+          project,
+          vectorIndex: jsonIndex,
+          reranker,
+          useReranker,
+          repeats
+        })
       },
       memory: await runMemorySuite(root)
     };
+
+    report.search.sqlite = await report.search.sqlite;
+    report.search.json = await report.search.json;
 
     console.log(JSON.stringify(report, null, 2));
   } finally {

@@ -3,7 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { resolveConfigPath as resolveDefaultConfigPath, resolveLocalnestHome } from '../src/home-layout.js';
+import {
+  buildLocalnestPaths,
+  resolveConfigPath as resolveDefaultConfigPath,
+  resolveLocalnestHome,
+  resolveWritableModelCacheDir
+} from '../src/home-layout.js';
 
 if (!process.env.DART_SUPPRESS_ANALYTICS) {
   process.env.DART_SUPPRESS_ANALYTICS = 'true';
@@ -35,6 +40,29 @@ function resolveConfigPath() {
     env: process.env,
     localnestHome: resolveLocalnestHome(process.env)
   });
+}
+
+function parseConfigForModelCacheDirs() {
+  const out = {
+    embeddingCacheDir: '',
+    rerankerCacheDir: ''
+  };
+  const cfgPath = resolveConfigPath();
+  try {
+    if (!fs.existsSync(cfgPath)) return out;
+    const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    const byConfigEmbedding = parsed?.index?.embeddingCacheDir;
+    const byConfigReranker = parsed?.index?.rerankerCacheDir;
+    if (typeof byConfigEmbedding === 'string' && byConfigEmbedding.trim()) {
+      out.embeddingCacheDir = path.resolve(byConfigEmbedding);
+    }
+    if (typeof byConfigReranker === 'string' && byConfigReranker.trim()) {
+      out.rerankerCacheDir = path.resolve(byConfigReranker);
+    }
+  } catch {
+    // Keep defaults.
+  }
+  return out;
 }
 
 function resolveIndexBackend() {
@@ -192,6 +220,50 @@ function checkConfigFile() {
   };
 }
 
+function checkModelCacheWritable() {
+  const localnestHome = resolveLocalnestHome(process.env);
+  const configCaches = parseConfigForModelCacheDirs();
+  const defaultCache = buildLocalnestPaths(localnestHome).dirs.cache;
+  const embedPreferred = path.resolve(
+    (process.env.LOCALNEST_EMBED_CACHE_DIR || '').trim() ||
+    configCaches.embeddingCacheDir ||
+    defaultCache
+  );
+  const rerankerPreferred = path.resolve(
+    (process.env.LOCALNEST_RERANKER_CACHE_DIR || '').trim() ||
+    configCaches.rerankerCacheDir ||
+    defaultCache
+  );
+  const embedResolved = resolveWritableModelCacheDir({
+    preferredDir: embedPreferred,
+    localnestHome,
+    env: process.env
+  });
+  const rerankerResolved = resolveWritableModelCacheDir({
+    preferredDir: rerankerPreferred,
+    localnestHome,
+    env: process.env
+  });
+
+  if (!embedResolved.writable || !rerankerResolved.writable) {
+    return {
+      id: 'model_cache',
+      ok: false,
+      detail: 'Model cache not writable for configured or fallback locations',
+      fix: 'Set LOCALNEST_EMBED_CACHE_DIR/LOCALNEST_RERANKER_CACHE_DIR to a writable path, then re-run localnest setup.'
+    };
+  }
+
+  const fallbackUsed = embedResolved.fallbackUsed || rerankerResolved.fallbackUsed;
+  return {
+    id: 'model_cache',
+    ok: true,
+    detail: fallbackUsed
+      ? 'Model cache writable (fallback active)'
+      : 'Model cache writable'
+  };
+}
+
 function printText(results) {
   console.log('LocalNest Doctor');
   console.log('');
@@ -220,7 +292,8 @@ async function main() {
     checkRipgrep(),
     await checkSdkImport(),
     await checkSqliteBackend(),
-    checkConfigFile()
+    checkConfigFile(),
+    checkModelCacheWritable()
   ];
 
   if (asJson) {

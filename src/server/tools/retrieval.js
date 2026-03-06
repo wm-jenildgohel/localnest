@@ -9,6 +9,20 @@ export function registerRetrievalTools({
   defaultMaxReadLines,
   defaultMaxResults
 }) {
+  async function emitProgress(extra, progress, total, message) {
+    const token = extra?._meta?.progressToken;
+    if (token === undefined || typeof extra?.sendNotification !== 'function') return;
+    await extra.sendNotification({
+      method: 'notifications/progress',
+      params: {
+        progressToken: token,
+        progress,
+        total,
+        message
+      }
+    });
+  }
+
   registerJsonTool(
     'localnest_list_roots',
     {
@@ -94,6 +108,30 @@ export function registerRetrievalTools({
   );
 
   registerJsonTool(
+    'localnest_embed_status',
+    {
+      title: 'Embedding Status',
+      description: 'Return active embedding backend/model status and vector-search readiness.',
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async () => {
+      const status = vectorIndex.getStatus();
+      return {
+        backend: status.backend || 'json',
+        embedding: status.embedding || null,
+        sqlite_vec_extension: status.sqlite_vec_extension || null,
+        sqlite_vec_table_ready: status.sqlite_vec_table_ready ?? null
+      };
+    }
+  );
+
+  registerJsonTool(
     'localnest_index_project',
     {
       title: 'Index Project',
@@ -111,12 +149,25 @@ export function registerRetrievalTools({
         openWorldHint: false
       }
     },
-    async ({ project_path, all_roots, force, max_files }) => vectorIndex.indexProject({
-      projectPath: project_path,
-      allRoots: all_roots,
-      force,
-      maxFiles: max_files
-    })
+    async ({ project_path, all_roots, force, max_files }, extra) => {
+      await emitProgress(extra, 0, max_files, 'index_project started');
+      const out = await vectorIndex.indexProject({
+        projectPath: project_path,
+        allRoots: all_roots,
+        force,
+        maxFiles: max_files,
+        onProgress: async ({ scanned = 0, total = max_files, phase = 'indexing' }) => {
+          await emitProgress(extra, scanned, total, phase);
+        }
+      });
+      await emitProgress(
+        extra,
+        out.scanned_files || out.total_files || max_files,
+        out.scanned_files || out.total_files || max_files,
+        'index_project completed'
+      );
+      return out;
+    }
   );
 
   registerJsonTool(
@@ -194,7 +245,8 @@ export function registerRetrievalTools({
         max_results: z.number().int().min(1).max(1000).default(defaultMaxResults),
         case_sensitive: z.boolean().default(false),
         min_semantic_score: z.number().min(0).max(1).default(0.05),
-        auto_index: z.boolean().default(true)
+        auto_index: z.boolean().default(true),
+        use_reranker: z.boolean().default(false)
       },
       annotations: {
         readOnlyHint: false,
@@ -203,7 +255,7 @@ export function registerRetrievalTools({
         openWorldHint: false
       }
     },
-    async ({ query, project_path, all_roots, glob, max_results, case_sensitive, min_semantic_score, auto_index }) => search.searchHybrid({
+    async ({ query, project_path, all_roots, glob, max_results, case_sensitive, min_semantic_score, auto_index, use_reranker }) => search.searchHybrid({
       query,
       projectPath: project_path,
       allRoots: all_roots,
@@ -211,7 +263,70 @@ export function registerRetrievalTools({
       maxResults: max_results,
       caseSensitive: case_sensitive,
       minSemanticScore: min_semantic_score,
-      autoIndex: auto_index
+      autoIndex: auto_index,
+      useReranker: use_reranker
+    })
+  );
+
+  registerJsonTool(
+    'localnest_get_symbol',
+    {
+      title: 'Get Symbol',
+      description: 'Look up symbol definitions/exports by name using fast regex search.',
+      inputSchema: {
+        symbol: z.string().min(1),
+        project_path: z.string().optional(),
+        all_roots: z.boolean().default(false),
+        glob: z.string().default('*'),
+        max_results: z.number().int().min(1).max(1000).default(defaultMaxResults),
+        case_sensitive: z.boolean().default(false)
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ symbol, project_path, all_roots, glob, max_results, case_sensitive }) => search.getSymbol({
+      symbol,
+      projectPath: project_path,
+      allRoots: all_roots,
+      glob,
+      maxResults: max_results,
+      caseSensitive: case_sensitive
+    })
+  );
+
+  registerJsonTool(
+    'localnest_find_usages',
+    {
+      title: 'Find Usages',
+      description: 'Find call sites and import usages of a symbol by name.',
+      inputSchema: {
+        symbol: z.string().min(1),
+        project_path: z.string().optional(),
+        all_roots: z.boolean().default(false),
+        glob: z.string().default('*'),
+        max_results: z.number().int().min(1).max(1000).default(defaultMaxResults),
+        case_sensitive: z.boolean().default(false),
+        context_lines: z.number().int().min(0).max(10).default(0)
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ symbol, project_path, all_roots, glob, max_results, case_sensitive, context_lines }) => search.findUsages({
+      symbol,
+      projectPath: project_path,
+      allRoots: all_roots,
+      glob,
+      maxResults: max_results,
+      caseSensitive: case_sensitive,
+      contextLines: context_lines
     })
   );
 

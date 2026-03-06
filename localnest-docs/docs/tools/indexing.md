@@ -11,6 +11,13 @@
 
 Returns whether semantic index data exists and which backend is active.
 
+When using the JSON backend on larger indexes, this response includes:
+
+- `upgrade_recommended: true`
+- `upgrade_reason`
+
+If shown, migrate to `sqlite-vec` (Node 22.13+) for better scale and latency.
+
 ## `localnest_index_project`
 
 Builds or refreshes semantic index data.

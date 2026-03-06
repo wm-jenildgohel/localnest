@@ -3,8 +3,15 @@ node_modules/
 .localnest/
 .mcp.localnest.json
 .mcp.localnest.*.json
+.mcp.json
 localnest.config.json
+/CLAUDE.md
+/.claude/
+/.claude-flow/
+/.codex/
 /docs/
+*AUDIT-REPORT*.md
+*ACTION-PLAN*.md
 
 # Secrets and credentials (OSPS-BR-07.01)
 .env

@@ -6,8 +6,8 @@ import {
   SERVER_VERSION,
   buildRuntimeConfig
 } from '../src/config.js';
-import { MemoryService } from '../src/services/memory-service.js';
-import { MemoryWorkflowService } from '../src/services/memory-workflow-service.js';
+import { MemoryService } from '../src/services/memory/service.js';
+import { MemoryWorkflowService } from '../src/services/memory/workflow.js';
 
 export function parseArg(argv, name) {
   const direct = `--${name}`;

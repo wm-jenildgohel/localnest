@@ -19,7 +19,8 @@ export function createServerStatusBuilder({
   workspace,
   memory,
   updates,
-  getActiveIndexBackend
+  getActiveIndexBackend,
+  vectorIndex
 }) {
   async function buildMemorySummary() {
     const status = await memory.getStatus();
@@ -37,6 +38,7 @@ export function createServerStatusBuilder({
   }
 
   return async function buildServerStatus() {
+    const indexStatus = vectorIndex?.getStatus?.() || null;
     return {
       name: serverName,
       version: serverVersion,
@@ -58,7 +60,14 @@ export function createServerStatusBuilder({
         chunk_lines: runtime.vectorChunkLines,
         chunk_overlap: runtime.vectorChunkOverlap,
         max_terms_per_chunk: runtime.vectorMaxTermsPerChunk,
-        max_indexed_files: runtime.vectorMaxIndexedFiles
+        max_indexed_files: runtime.vectorMaxIndexedFiles,
+        embedding_provider: runtime.embeddingProvider,
+        embedding_model: runtime.embeddingModel,
+        embedding_dimensions: runtime.embeddingDimensions,
+        reranker_provider: runtime.rerankerProvider,
+        reranker_model: runtime.rerankerModel,
+        upgrade_recommended: indexStatus?.upgrade_recommended || false,
+        upgrade_reason: indexStatus?.upgrade_reason || null
       },
       updates: await updates.getStatus({ force: false })
     };

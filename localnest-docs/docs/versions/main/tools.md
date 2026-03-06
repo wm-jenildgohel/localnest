@@ -24,6 +24,8 @@
 - `localnest_search_files`
 - `localnest_search_code`
 - `localnest_search_hybrid`
+- `localnest_get_symbol`
+- `localnest_find_usages`
 - `localnest_read_file`
 - `localnest_summarize_project`
 
@@ -33,3 +35,4 @@
 - `localnest_update_self` requires explicit user approval
 - `localnest_usage_guide` pushes `search_files` first for module discovery
 - `localnest_search_hybrid` is positioned as the main concept-retrieval tool
+- `localnest_index_status` can return `upgrade_recommended` for large JSON indexes

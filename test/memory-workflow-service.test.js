@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryWorkflowService } from '../src/services/memory-workflow-service.js';
+import { MemoryWorkflowService } from '../src/services/memory/workflow.js';
 
 function createMemoryStub({
   status = {

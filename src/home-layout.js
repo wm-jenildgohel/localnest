@@ -37,6 +37,56 @@ export function buildLocalnestPaths(localnestHome) {
   };
 }
 
+function sanitizeOwnerToken(input) {
+  return String(input || 'user')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'user';
+}
+
+function writeProbeFile(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+  const probe = path.join(dirPath, `.localnest-cache-probe-${process.pid}-${Date.now()}`);
+  fs.writeFileSync(probe, 'ok', 'utf8');
+  fs.rmSync(probe, { force: true });
+}
+
+export function resolveWritableModelCacheDir({ preferredDir, localnestHome, env = process.env } = {}) {
+  const preferred = path.resolve(preferredDir || path.join(resolveLocalnestHome(env), 'cache'));
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  const owner = Number.isInteger(uid) ? `uid-${uid}` : sanitizeOwnerToken(env.USER || env.USERNAME || 'user');
+  const fallbackBase = path.join(os.tmpdir(), `localnest-models-${owner}`);
+  const fallbackShared = path.join(os.tmpdir(), 'localnest-models');
+  const candidates = Array.from(new Set([
+    preferred,
+    localnestHome ? path.join(path.resolve(localnestHome), 'cache') : null,
+    fallbackBase,
+    fallbackShared
+  ].filter(Boolean).map((candidate) => path.resolve(candidate))));
+
+  for (const candidate of candidates) {
+    try {
+      writeProbeFile(candidate);
+      return {
+        path: candidate,
+        preferredPath: preferred,
+        writable: true,
+        fallbackUsed: candidate !== preferred
+      };
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return {
+    path: preferred,
+    preferredPath: preferred,
+    writable: false,
+    fallbackUsed: false
+  };
+}
+
 function moveIfNeeded(source, target) {
   if (!fs.existsSync(source)) return false;
   if (fs.existsSync(target)) return false;

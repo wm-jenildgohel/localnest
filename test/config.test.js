@@ -186,3 +186,26 @@ test('applyConsolePolicy disables common console outputs', () => {
   console.debug = original.debug;
   console.warn = original.warn;
 });
+
+test('buildRuntimeConfig falls back to writable model cache directory', () => {
+  if (process.platform === 'win32') return;
+
+  const localnestHome = makeTempDir();
+  const blocked = path.join(localnestHome, 'blocked-cache');
+  fs.mkdirSync(blocked, { recursive: true });
+  fs.chmodSync(blocked, 0o555);
+
+  const runtime = buildRuntimeConfig({
+    LOCALNEST_HOME: localnestHome,
+    LOCALNEST_EMBED_CACHE_DIR: blocked,
+    LOCALNEST_RERANKER_CACHE_DIR: blocked
+  });
+
+  assert.notEqual(runtime.embeddingCacheDir, blocked);
+  assert.notEqual(runtime.rerankerCacheDir, blocked);
+  assert.equal(runtime.embeddingCacheDir, runtime.rerankerCacheDir);
+  assert.equal(fs.existsSync(runtime.embeddingCacheDir), true);
+
+  fs.chmodSync(blocked, 0o755);
+  fs.rmSync(localnestHome, { recursive: true, force: true });
+});

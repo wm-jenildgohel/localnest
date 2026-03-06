@@ -9,6 +9,14 @@
 
 ## Setup flow
 
+Install this exact archived version first:
+
+```bash
+npm install -g localnest-mcp@0.0.1-beta.1
+```
+
+Then run setup/doctor:
+
 ```bash
 npx -y localnest-mcp-setup
 npx -y localnest-mcp-doctor
@@ -20,3 +28,5 @@ npx -y localnest-mcp-doctor
 - setup generates `npx.cmd` on Windows and `npx` on Linux/macOS
 - setup asks users to choose the index backend
 - global-install-first guidance had not stabilized yet in this version
+- `localnest-mcp-install-skill` is not part of this version line
+- use [/docs/releases/version-selection](/docs/releases/version-selection) to choose another version line

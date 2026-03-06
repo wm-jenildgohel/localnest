@@ -20,7 +20,7 @@ LocalNest MCP is a local-first MCP server that gives AI agents scoped access to 
   <div className="docPanel docPanel--compact">
     <div className="docStat">
       <span className="docStat__label">Current beta package</span>
-      <strong>0.0.4-beta.4</strong>
+      <strong>0.0.4-beta.5</strong>
     </div>
     <div className="docStat">
       <span className="docStat__label">Preferred backend</span>
@@ -35,13 +35,20 @@ LocalNest MCP is a local-first MCP server that gives AI agents scoped access to 
 
 ## Quick start
 
+If you want the shortest path:
+
+1. Install globally.
+2. Run setup.
+3. Run doctor.
+4. Paste the generated MCP block into your client.
+
 Recommended global install:
 
 ```bash
 npm install -g localnest-mcp
 localnest-mcp-install-skill
-localnest-mcp-setup
-localnest-mcp-doctor
+localnest setup
+localnest doctor
 ```
 
 Fallback:
@@ -50,6 +57,12 @@ Fallback:
 npx -y localnest-mcp-setup
 npx -y localnest-mcp-doctor
 ```
+
+## Choose your path
+
+- New install: start with [Install](/docs/setup/install), then [Configuration](/docs/setup/configuration).
+- Daily coding workflow: jump to [Tools](/docs/tools/overview) and [Search](/docs/tools/search).
+- Version-specific behavior: use [Current beta release](/docs/releases/current) and [Release matrix](/docs/releases/history).
 
 ## What you get
 
@@ -77,7 +90,7 @@ npx -y localnest-mcp-doctor
 <div className="docGrid docGrid--2">
   <a className="docLinkCard" href="./setup/install">
     <strong>Install</strong>
-    <span>Set up the package, skill, doctor checks, and MCP client block.</span>
+    <span>Set up the package, skill, doctor checks, sync option, and MCP client block.</span>
   </a>
   <a className="docLinkCard" href="./setup/configuration">
     <strong>Configuration</strong>
@@ -89,7 +102,7 @@ npx -y localnest-mcp-doctor
   </a>
   <a className="docLinkCard" href="./releases/current">
     <strong>Current beta release</strong>
-    <span>See the `0.0.4-beta.4` beta behavior, including local memory and setup changes.</span>
+    <span>See the `0.0.4-beta.5` beta behavior, including `localnest upgrade`, setup updates, and memory workflow.</span>
   </a>
   <a className="docLinkCard" href="./releases/history">
     <strong>Release matrix</strong>
@@ -104,7 +117,7 @@ npx -y localnest-mcp-doctor
     <span>1</span>
     <div>
       <strong>Bootstrap the environment</strong>
-      <p>Install the package, run `localnest-mcp-setup`, opt into memory if needed, then verify with `localnest-mcp-doctor`.</p>
+      <p>Install the package, run `localnest setup`, opt into memory if needed, then verify with `localnest doctor`.</p>
     </div>
   </div>
   <div className="docStep">

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { MemoryService } from '../src/services/memory-service.js';
+import { MemoryService } from '../src/services/memory/service.js';
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-memory-service-test-'));

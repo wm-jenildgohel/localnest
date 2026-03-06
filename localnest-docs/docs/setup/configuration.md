@@ -31,6 +31,14 @@
 2. `LOCALNEST_CONFIG`
 3. current working directory fallback
 
+## Most common changes
+
+Most teams only adjust these values:
+
+- `PROJECT_ROOTS`: set one or more explicit root paths.
+- `LOCALNEST_INDEX_BACKEND`: keep `sqlite-vec` on Node 22+, otherwise use `json`.
+- `LOCALNEST_MEMORY_ENABLED`: set `true` only when you explicitly want local memory features.
+
 ## Practical guidance
 
 - Use `PROJECT_ROOTS` when you want a temporary override in CI or a one-off shell session.

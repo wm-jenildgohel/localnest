@@ -43,15 +43,20 @@ test('ensureConfigUpgraded migrates old config and creates backup', () => {
 
   const result = ensureConfigUpgraded({ configPath: cfgPath, localnestHome: root });
   assert.equal(result.changed, true);
-  assert.equal(result.version, 3);
+  assert.equal(result.version, 4);
   assert.ok(result.backupPath);
   assert.ok(fs.existsSync(result.backupPath));
 
   const upgraded = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  assert.equal(upgraded.version, 3);
+  assert.equal(upgraded.version, 4);
   assert.equal(upgraded.index.backend, 'sqlite-vec');
   assert.equal(upgraded.index.maxIndexedFiles, 20000);
   assert.equal(upgraded.index.dbPath, buildLocalnestPaths(root).sqliteDbPath);
+  assert.equal(upgraded.index.embeddingProvider, 'xenova');
+  assert.equal(upgraded.index.embeddingModel, 'Xenova/all-MiniLM-L6-v2');
+  assert.equal(upgraded.index.embeddingDimensions, 384);
+  assert.equal(upgraded.index.rerankerProvider, 'xenova');
+  assert.equal(upgraded.index.rerankerModel, 'Xenova/ms-marco-MiniLM-L-6-v2');
   assert.equal(upgraded.memory.enabled, false);
   assert.equal(upgraded.memory.backend, 'auto');
   assert.equal(upgraded.memory.autoCapture, false);
@@ -64,7 +69,7 @@ test('ensureConfigUpgraded returns up-to-date without rewrite', () => {
   const cfgPath = buildLocalnestPaths(root).configPath;
   fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
   const data = {
-    version: 3,
+    version: 4,
     roots: [{ label: 'x', path: root }],
     index: {
       backend: 'sqlite-vec',
@@ -73,7 +78,14 @@ test('ensureConfigUpgraded returns up-to-date without rewrite', () => {
       chunkLines: 60,
       chunkOverlap: 15,
       maxTermsPerChunk: 80,
-      maxIndexedFiles: 20000
+      maxIndexedFiles: 20000,
+      embeddingProvider: 'xenova',
+      embeddingModel: 'Xenova/all-MiniLM-L6-v2',
+      embeddingCacheDir: path.join(root, '.cache'),
+      embeddingDimensions: 384,
+      rerankerProvider: 'xenova',
+      rerankerModel: 'Xenova/ms-marco-MiniLM-L-6-v2',
+      rerankerCacheDir: path.join(root, '.cache')
     },
     memory: {
       enabled: true,

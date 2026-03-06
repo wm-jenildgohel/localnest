@@ -84,12 +84,12 @@ export function createJsonToolRegistrar(server, responseFormatSchema) {
         },
         annotations
       },
-      async (args) => {
+      async (args, extra) => {
         const incoming = args || {};
         const responseFormat = incoming.response_format || 'json';
         const toolArgs = { ...incoming };
         delete toolArgs.response_format;
-        const data = await handler(toolArgs);
+        const data = await handler(toolArgs, extra);
         return toolResult(data, responseFormat, markdownTitle || title);
       }
     );

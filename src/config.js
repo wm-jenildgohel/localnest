@@ -5,7 +5,8 @@ import { ensureConfigUpgraded } from './migrations/config-migrator.js';
 import {
   migrateLocalnestHomeLayout,
   resolveConfigPath as resolveDefaultConfigPath,
-  resolveLocalnestHome
+  resolveLocalnestHome,
+  resolveWritableModelCacheDir
 } from './home-layout.js';
 
 function parseBoolean(value, fallback) {
@@ -29,7 +30,7 @@ function parseStringEnv(value, fallback) {
 }
 
 export const SERVER_NAME = 'localnest';
-export const SERVER_VERSION = '0.0.4-beta.4';
+export const SERVER_VERSION = '0.0.4-beta.5';
 
 export const DEFAULT_MAX_READ_LINES = 400;
 export const DEFAULT_MAX_RESULTS = 100;
@@ -201,6 +202,13 @@ function parseConfigFileSettings(configPath) {
     sqliteVecExtensionPath: typeof index.sqliteVecExtensionPath === 'string'
       ? index.sqliteVecExtensionPath
       : undefined,
+    embeddingProvider: typeof index.embeddingProvider === 'string' ? index.embeddingProvider : undefined,
+    embeddingModel: typeof index.embeddingModel === 'string' ? index.embeddingModel : undefined,
+    embeddingCacheDir: typeof index.embeddingCacheDir === 'string' ? index.embeddingCacheDir : undefined,
+    embeddingDimensions: Number.isFinite(index.embeddingDimensions) ? index.embeddingDimensions : undefined,
+    rerankerProvider: typeof index.rerankerProvider === 'string' ? index.rerankerProvider : undefined,
+    rerankerModel: typeof index.rerankerModel === 'string' ? index.rerankerModel : undefined,
+    rerankerCacheDir: typeof index.rerankerCacheDir === 'string' ? index.rerankerCacheDir : undefined,
     memoryEnabled: typeof memory.enabled === 'boolean' ? memory.enabled : undefined,
     memoryBackend: typeof memory.backend === 'string' ? memory.backend : undefined,
     memoryDbPath: typeof memory.dbPath === 'string' ? memory.dbPath : undefined,
@@ -243,6 +251,34 @@ export function buildRuntimeConfig(env = process.env) {
     );
   }
   const fileSettings = parseConfigFileSettings(configPath);
+  const embeddingCachePreferred = path.resolve(
+    env.LOCALNEST_EMBED_CACHE_DIR || fileSettings.embeddingCacheDir || layout.dirs.cache
+  );
+  const rerankerCachePreferred = path.resolve(
+    env.LOCALNEST_RERANKER_CACHE_DIR || fileSettings.rerankerCacheDir || layout.dirs.cache
+  );
+  const embeddingCacheResolved = resolveWritableModelCacheDir({
+    preferredDir: embeddingCachePreferred,
+    localnestHome,
+    env
+  });
+  const rerankerCacheResolved = resolveWritableModelCacheDir({
+    preferredDir: rerankerCachePreferred,
+    localnestHome,
+    env
+  });
+
+  if (embeddingCacheResolved.fallbackUsed) {
+    process.stderr.write(
+      '[localnest-config] embedding cache fallback enabled due to unwritable preferred cache path\n'
+    );
+  }
+  if (rerankerCacheResolved.fallbackUsed) {
+    process.stderr.write(
+      '[localnest-config] reranker cache fallback enabled due to unwritable preferred cache path\n'
+    );
+  }
+
   return {
     localnestHome,
     mcpMode: (env.MCP_MODE || 'stdio').toLowerCase(),
@@ -278,6 +314,28 @@ export function buildRuntimeConfig(env = process.env) {
       env.LOCALNEST_VECTOR_MAX_FILES,
       fileSettings.maxIndexedFiles || DEFAULT_MAX_INDEX_FILES
     ),
+    embeddingProvider: parseStringEnv(
+      env.LOCALNEST_EMBED_PROVIDER,
+      fileSettings.embeddingProvider || 'xenova'
+    ),
+    embeddingModel: parseStringEnv(
+      env.LOCALNEST_EMBED_MODEL,
+      fileSettings.embeddingModel || 'Xenova/all-MiniLM-L6-v2'
+    ),
+    embeddingCacheDir: embeddingCacheResolved.path,
+    embeddingDimensions: parseIntEnv(
+      env.LOCALNEST_EMBED_DIMS,
+      fileSettings.embeddingDimensions || 384
+    ),
+    rerankerProvider: parseStringEnv(
+      env.LOCALNEST_RERANKER_PROVIDER,
+      fileSettings.rerankerProvider || 'xenova'
+    ),
+    rerankerModel: parseStringEnv(
+      env.LOCALNEST_RERANKER_MODEL,
+      fileSettings.rerankerModel || 'Xenova/ms-marco-MiniLM-L-6-v2'
+    ),
+    rerankerCacheDir: rerankerCacheResolved.path,
     updatePackageName: parseStringEnv(env.LOCALNEST_UPDATE_PACKAGE, 'localnest-mcp'),
     updateCheckIntervalMinutes: parseIntEnvClamped(
       env.LOCALNEST_UPDATE_CHECK_INTERVAL_MINUTES,
@@ -290,6 +348,12 @@ export function buildRuntimeConfig(env = process.env) {
       15,
       5,
       240
+    ),
+    indexSweepIntervalMinutes: parseIntEnvClamped(
+      env.LOCALNEST_INDEX_SWEEP_INTERVAL_MINUTES,
+      5,
+      0,
+      1440
     ),
     extraProjectMarkers: new Set(
       (env.LOCALNEST_EXTRA_PROJECT_MARKERS || '')

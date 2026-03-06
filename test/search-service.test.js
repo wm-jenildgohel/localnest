@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SearchService } from '../src/services/search-service.js';
+import { SearchService } from '../src/services/search/service.js';
 
-test('searchHybrid merges semantic and lexical overlap into hybrid result', () => {
+test('searchHybrid merges semantic and lexical overlap into hybrid result', async () => {
   const service = new SearchService({
     workspace: {},
     ignoreDirs: new Set(),
@@ -27,7 +27,7 @@ test('searchHybrid merges semantic and lexical overlap into hybrid result', () =
     { file: '/tmp/b.js', line: 5, text: 'beta();' }
   ]);
 
-  const out = service.searchHybrid({
+  const out = await service.searchHybrid({
     query: 'alpha',
     projectPath: '/tmp',
     allRoots: false,
@@ -47,7 +47,7 @@ test('searchHybrid merges semantic and lexical overlap into hybrid result', () =
   assert.ok(out.results[0].semantic_score > 0);
 });
 
-test('searchHybrid auto-indexes once when semantic results are empty', () => {
+test('searchHybrid auto-indexes once when semantic results are empty', async () => {
   const calls = { semantic: 0, index: 0 };
   const service = new SearchService({
     workspace: {
@@ -80,7 +80,7 @@ test('searchHybrid auto-indexes once when semantic results are empty', () => {
 
   service.searchCode = () => [];
 
-  const first = service.searchHybrid({
+  const first = await service.searchHybrid({
     query: 'alpha',
     projectPath: '/tmp/project',
     allRoots: false,
@@ -97,7 +97,7 @@ test('searchHybrid auto-indexes once when semantic results are empty', () => {
   assert.equal(first.auto_index?.attempted, true);
   assert.equal(first.auto_index?.success, true);
 
-  const second = service.searchHybrid({
+  const second = await service.searchHybrid({
     query: 'missing',
     projectPath: '/tmp/project',
     allRoots: false,
@@ -112,7 +112,7 @@ test('searchHybrid auto-indexes once when semantic results are empty', () => {
   assert.equal(second.auto_index?.skipped_reason, 'already_attempted_for_scope');
 });
 
-test('searchHybrid does not auto-index when autoIndex is false', () => {
+test('searchHybrid does not auto-index when autoIndex is false', async () => {
   const service = new SearchService({
     workspace: {
       resolveSearchBases: () => ['/tmp/project'],
@@ -132,7 +132,7 @@ test('searchHybrid does not auto-index when autoIndex is false', () => {
 
   service.searchCode = () => [];
 
-  const out = service.searchHybrid({
+  const out = await service.searchHybrid({
     query: 'alpha',
     projectPath: '/tmp/project',
     allRoots: false,
@@ -148,7 +148,7 @@ test('searchHybrid does not auto-index when autoIndex is false', () => {
   assert.equal(out.auto_index, null);
 });
 
-test('searchHybrid reports lexical-only ranking mode when semantic results are absent', () => {
+test('searchHybrid reports lexical-only ranking mode when semantic results are absent', async () => {
   const service = new SearchService({
     workspace: {},
     ignoreDirs: new Set(),
@@ -164,7 +164,7 @@ test('searchHybrid reports lexical-only ranking mode when semantic results are a
     { file: '/tmp/a.js', line: 5, text: 'alpha();' }
   ]);
 
-  const out = service.searchHybrid({
+  const out = await service.searchHybrid({
     query: 'alpha',
     projectPath: '/tmp',
     allRoots: false,
@@ -179,7 +179,7 @@ test('searchHybrid reports lexical-only ranking mode when semantic results are a
   assert.equal(out.results[0].type, 'lexical');
 });
 
-test('searchHybrid downranks lexical-only noise for generic short queries', () => {
+test('searchHybrid downranks lexical-only noise for generic short queries', async () => {
   const service = new SearchService({
     workspace: {},
     ignoreDirs: new Set(),
@@ -203,7 +203,7 @@ test('searchHybrid downranks lexical-only noise for generic short queries', () =
     { file: '/tmp/SECURITY.md', line: 8, text: 'Install ripgrep for search' }
   ]);
 
-  const out = service.searchHybrid({
+  const out = await service.searchHybrid({
     query: 'search',
     projectPath: '/tmp',
     allRoots: false,
@@ -219,7 +219,7 @@ test('searchHybrid downranks lexical-only noise for generic short queries', () =
   assert.equal(out.results[0].type, 'semantic');
 });
 
-test('searchHybrid adds path affinity bias in allRoots mode', () => {
+test('searchHybrid adds path affinity bias in allRoots mode', async () => {
   const service = new SearchService({
     workspace: {},
     ignoreDirs: new Set(),
@@ -248,7 +248,7 @@ test('searchHybrid adds path affinity bias in allRoots mode', () => {
 
   service.searchCode = () => [];
 
-  const out = service.searchHybrid({
+  const out = await service.searchHybrid({
     query: 'localnest hybrid search RRF scoring',
     projectPath: undefined,
     allRoots: true,
@@ -262,4 +262,55 @@ test('searchHybrid adds path affinity bias in allRoots mode', () => {
   assert.equal(out.ranking_mode, 'semantic-only');
   assert.equal(out.results[0].file, '/tmp/localnest/src/search-service.js');
   assert.ok(out.results[0].path_affinity > out.results[1].path_affinity);
+});
+
+test('searchHybrid applies reranker when requested', async () => {
+  const service = new SearchService({
+    workspace: {},
+    ignoreDirs: new Set(),
+    hasRipgrep: false,
+    rgTimeoutMs: 1000,
+    maxFileBytes: 1024,
+    rerankerMinCandidates: 1,
+    rerankerTopN: 2,
+    reranker: {
+      isEnabled: () => true,
+      rerank: async () => [0.05, 0.95]
+    },
+    vectorIndex: {
+      semanticSearch: () => ([
+        {
+          file: '/tmp/a.js',
+          start_line: 1,
+          end_line: 5,
+          snippet: 'alpha',
+          semantic_score: 0.8
+        },
+        {
+          file: '/tmp/b.js',
+          start_line: 1,
+          end_line: 5,
+          snippet: 'beta',
+          semantic_score: 0.79
+        }
+      ])
+    }
+  });
+
+  service.searchCode = () => [];
+  const out = await service.searchHybrid({
+    query: 'alpha beta',
+    projectPath: '/tmp',
+    allRoots: false,
+    glob: '*',
+    maxResults: 5,
+    caseSensitive: false,
+    minSemanticScore: 0,
+    autoIndex: false,
+    useReranker: true
+  });
+
+  assert.equal(out.reranker?.applied, true);
+  assert.equal(out.results[0].file, '/tmp/b.js');
+  assert.ok(out.results[0].reranker_score > out.results[1].reranker_score);
 });
