@@ -1,3 +1,7 @@
+---
+description: Overview of unreleased LocalNest main branch docs, including update commands and source-level behavior not yet published to npm.
+---
+
 # main Overview
 
 <div className="docPanel docPanel--compact">

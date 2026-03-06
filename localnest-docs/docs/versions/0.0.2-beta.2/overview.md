@@ -1,3 +1,7 @@
+---
+description: Overview of LocalNest v0.0.2-beta.2 introducing canonical tool naming, response formats, bundled skill distribution, and stronger test coverage.
+---
+
 # 0.0.2-beta.2 Overview
 
 <div className="docPanel docPanel--compact">

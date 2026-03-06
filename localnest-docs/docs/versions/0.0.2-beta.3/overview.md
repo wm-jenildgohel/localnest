@@ -1,3 +1,7 @@
+---
+description: Overview of LocalNest v0.0.2-beta.3 with retrieval improvements, semantic indexing updates, and search reliability fixes.
+---
+
 # 0.0.2-beta.3 Overview
 
 <div className="docPanel docPanel--compact">

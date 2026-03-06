@@ -1,6 +1,10 @@
+---
+description: Overview of LocalNest v0.0.3 stable docs, including supported capabilities and differences from unreleased main branch behavior.
+---
+
 # 0.0.3 Overview
 
-`0.0.3` is the current published npm release.
+`0.0.3` is the stable published npm release baseline used when you need documentation that matches production behavior instead of unreleased `main` changes.
 
 <div className="docPanel docPanel--compact">
   <p>

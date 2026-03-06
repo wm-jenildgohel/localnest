@@ -7,7 +7,13 @@ export default [
       'node_modules/**',
       '.npm-cache/**',
       '.localnest/**',
-      'coverage/**'
+      '.claude/**',
+      '.claude-flow/**',
+      'coverage/**',
+      'build/**',
+      '.docusaurus/**',
+      'localnest-docs/build/**',
+      'localnest-docs/.docusaurus/**'
     ]
   },
   js.configs.recommended,

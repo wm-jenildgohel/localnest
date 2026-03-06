@@ -26,7 +26,8 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Release Notes',
       items: [
-        { type: 'doc', id: 'releases/current', label: 'Current Stable' },
+        { type: 'doc', id: 'releases/version-selection', label: 'Version Selection' },
+        { type: 'doc', id: 'releases/current', label: 'Current Beta Release' },
         { type: 'doc', id: 'releases/history', label: 'Release Matrix' }
       ],
       collapsed: false
@@ -36,6 +37,17 @@ const sidebars: SidebarsConfig = {
       label: 'Version Archive',
       collapsed: true,
       items: [
+        {
+          type: 'category',
+          label: 'Beta 0.0.4-beta.4',
+          collapsed: true,
+          items: [
+            { type: 'doc', id: 'versions/0.0.4-beta.4/overview', label: 'Overview' },
+            { type: 'doc', id: 'versions/0.0.4-beta.4/install', label: 'Install' },
+            { type: 'doc', id: 'versions/0.0.4-beta.4/configuration', label: 'Configuration' },
+            { type: 'doc', id: 'versions/0.0.4-beta.4/tools', label: 'Tools' }
+          ]
+        },
         {
           type: 'category',
           label: 'Stable 0.0.3',

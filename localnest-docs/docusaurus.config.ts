@@ -40,9 +40,35 @@ const config: Config = {
       tagName: 'link',
       attributes: {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap',
       },
     },
+    {
+      tagName: 'script',
+      attributes: {
+        type: 'application/ld+json'
+      },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'WebSite',
+            name: 'LocalNest MCP Docs',
+            url: 'https://wmt-mobile.github.io/localnest/',
+            inLanguage: 'en',
+            publisher: {
+              '@type': 'Organization',
+              name: 'LocalNest'
+            }
+          },
+          {
+            '@type': 'Organization',
+            name: 'LocalNest',
+            url: 'https://github.com/wmt-mobile/localnest'
+          }
+        ]
+      })
+    }
   ],
   presets: [
     [
@@ -51,8 +77,9 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/docs',
+          editUrl: 'https://github.com/wmt-mobile/localnest/tree/main/localnest-docs/',
           showLastUpdateAuthor: false,
-          showLastUpdateTime: true,
+          showLastUpdateTime: false,
           sidebarCollapsible: true,
           sidebarCollapsed: false
         },
@@ -85,7 +112,7 @@ const config: Config = {
         },
         {
           href: 'https://www.npmjs.com/package/localnest-mcp',
-          label: 'v0.0.3',
+          label: 'v0.0.4-beta.5',
           position: 'right'
         },
         {
@@ -114,7 +141,7 @@ const config: Config = {
         {
           title: 'Versions',
           items: [
-            { label: 'Current release (0.0.3)', to: '/docs/releases/current' },
+            { label: 'Current beta (0.0.4-beta.5)', to: '/docs/releases/current' },
             { label: 'Release matrix', to: '/docs/releases/history' }
           ]
         },

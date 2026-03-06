@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { SearchService } from '../src/services/search-service.js';
+import { SearchService } from '../src/services/search/service.js';
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-search-test-'));
@@ -89,4 +89,74 @@ test('searchCode throws if normalizeTarget mismatch is detected', () => {
     }),
     /Resolved base path mismatch/
   );
+});
+
+test('symbol helpers find definitions, exports, imports, and calls', () => {
+  const root = makeTempDir();
+  const defs = path.join(root, 'defs.js');
+  const use = path.join(root, 'use.js');
+
+  fs.writeFileSync(
+    defs,
+    [
+      'export function AuthService() {',
+      '  return true;',
+      '}',
+      'export { AuthService };'
+    ].join('\n'),
+    'utf8'
+  );
+  fs.writeFileSync(
+    use,
+    [
+      "import { AuthService } from './defs.js';",
+      'const ok = AuthService();'
+    ].join('\n'),
+    'utf8'
+  );
+
+  const workspace = {
+    resolveSearchBases: () => [root],
+    normalizeTarget: (p) => p,
+    *walkDirectories(base) {
+      yield { files: [path.join(base, 'defs.js'), path.join(base, 'use.js')] };
+    },
+    isLikelyTextFile: () => true,
+    safeReadText: (p) => fs.readFileSync(p, 'utf8')
+  };
+
+  const service = new SearchService({
+    workspace,
+    ignoreDirs: new Set(),
+    hasRipgrep: false,
+    rgTimeoutMs: 1000,
+    maxFileBytes: 10_000,
+    vectorIndex: null
+  });
+
+  const symbol = service.getSymbol({
+    symbol: 'AuthService',
+    projectPath: root,
+    allRoots: false,
+    glob: '*.js',
+    maxResults: 20,
+    caseSensitive: false
+  });
+  assert.ok(symbol.count >= 1);
+  assert.ok(symbol.definitions.some((d) => d.file.endsWith('defs.js')));
+  assert.ok(symbol.exports.some((d) => d.file.endsWith('defs.js')));
+
+  const usages = service.findUsages({
+    symbol: 'AuthService',
+    projectPath: root,
+    allRoots: false,
+    glob: '*.js',
+    maxResults: 20,
+    caseSensitive: false,
+    contextLines: 1
+  });
+  assert.ok(usages.usages.some((u) => u.kind === 'import' && u.file.endsWith('use.js')));
+  assert.ok(usages.usages.some((u) => u.kind === 'call' && u.file.endsWith('use.js')));
+
+  fs.rmSync(root, { recursive: true, force: true });
 });

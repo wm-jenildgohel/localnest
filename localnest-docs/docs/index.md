@@ -6,7 +6,7 @@ title: Getting Started
 
 # Getting Started
 
-LocalNest MCP is a local-first MCP server that gives AI agents scoped, read-only access to your codebase, with optional semantic indexing and hybrid retrieval.
+LocalNest MCP is a local-first MCP server that gives AI agents scoped access to your codebase, with optional semantic indexing, hybrid retrieval, and local memory.
 
 <div className="docHero">
   <div className="docHero__lead">
@@ -19,8 +19,8 @@ LocalNest MCP is a local-first MCP server that gives AI agents scoped, read-only
   </div>
   <div className="docPanel docPanel--compact">
     <div className="docStat">
-      <span className="docStat__label">Current npm release</span>
-      <strong>0.0.3</strong>
+      <span className="docStat__label">Current beta package</span>
+      <strong>0.0.4-beta.5</strong>
     </div>
     <div className="docStat">
       <span className="docStat__label">Preferred backend</span>
@@ -35,13 +35,20 @@ LocalNest MCP is a local-first MCP server that gives AI agents scoped, read-only
 
 ## Quick start
 
+If you want the shortest path:
+
+1. Install globally.
+2. Run setup.
+3. Run doctor.
+4. Paste the generated MCP block into your client.
+
 Recommended global install:
 
 ```bash
 npm install -g localnest-mcp
 localnest-mcp-install-skill
-localnest-mcp-setup
-localnest-mcp-doctor
+localnest setup
+localnest doctor
 ```
 
 Fallback:
@@ -50,6 +57,12 @@ Fallback:
 npx -y localnest-mcp-setup
 npx -y localnest-mcp-doctor
 ```
+
+## Choose your path
+
+- New install: start with [Install](/docs/setup/install), then [Configuration](/docs/setup/configuration).
+- Daily coding workflow: jump to [Tools](/docs/tools/overview) and [Search](/docs/tools/search).
+- Version-specific behavior: use [Current beta release](/docs/releases/current) and [Release matrix](/docs/releases/history).
 
 ## What you get
 
@@ -66,6 +79,10 @@ npx -y localnest-mcp-doctor
     <h3>Local semantic retrieval</h3>
     <p>Index a project locally, then use hybrid retrieval to answer concept-level questions with better recall.</p>
   </div>
+  <div className="docPanel">
+    <h3>Durable local memory</h3>
+    <p>Enable opt-in memory capture to persist decisions, preferences, and prior fixes on your machine.</p>
+  </div>
 </div>
 
 ## Suggested reading order
@@ -73,7 +90,7 @@ npx -y localnest-mcp-doctor
 <div className="docGrid docGrid--2">
   <a className="docLinkCard" href="./setup/install">
     <strong>Install</strong>
-    <span>Set up the package, skill, doctor checks, and MCP client block.</span>
+    <span>Set up the package, skill, doctor checks, sync option, and MCP client block.</span>
   </a>
   <a className="docLinkCard" href="./setup/configuration">
     <strong>Configuration</strong>
@@ -84,8 +101,8 @@ npx -y localnest-mcp-doctor
     <span>See the full tool surface and the intended retrieval workflow.</span>
   </a>
   <a className="docLinkCard" href="./releases/current">
-    <strong>Current release</strong>
-    <span>Match behavior to the published npm release and stable docs contract.</span>
+    <strong>Current beta release</strong>
+    <span>See the `0.0.4-beta.5` beta behavior, including `localnest upgrade`, setup updates, and memory workflow.</span>
   </a>
   <a className="docLinkCard" href="./releases/history">
     <strong>Release matrix</strong>
@@ -100,7 +117,7 @@ npx -y localnest-mcp-doctor
     <span>1</span>
     <div>
       <strong>Bootstrap the environment</strong>
-      <p>Install the package, run `localnest-mcp-setup`, then verify with `localnest-mcp-doctor`.</p>
+      <p>Install the package, run `localnest setup`, opt into memory if needed, then verify with `localnest doctor`.</p>
     </div>
   </div>
   <div className="docStep">
@@ -120,12 +137,19 @@ npx -y localnest-mcp-doctor
   <div className="docStep">
     <span>4</span>
     <div>
+      <strong>Recall prior context</strong>
+      <p>If memory is enabled, run `localnest_task_context` before deeper analysis so runtime status and relevant memory come back together.</p>
+    </div>
+  </div>
+  <div className="docStep">
+    <span>5</span>
+    <div>
       <strong>Search with intent</strong>
       <p>Use `localnest_search_code` for exact identifiers and `localnest_search_hybrid` for concept retrieval.</p>
     </div>
   </div>
   <div className="docStep">
-    <span>5</span>
+    <span>6</span>
     <div>
       <strong>Validate with exact lines</strong>
       <p>Read the relevant file window with `localnest_read_file` before making changes or conclusions.</p>

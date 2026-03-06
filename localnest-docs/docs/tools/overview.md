@@ -3,7 +3,8 @@
 <div className="docPanel docPanel--compact">
   <p>
     Use the tools in layers: discover files first, then run exact or semantic search, then confirm
-    with file reads. That keeps retrieval fast and reduces false conclusions.
+    with file reads. When memory is enabled, recall it before analysis and capture meaningful outcomes
+    after the work is done.
   </p>
 </div>
 
@@ -36,6 +37,24 @@
       <li>`localnest_search_files`</li>
       <li>`localnest_search_code`</li>
       <li>`localnest_search_hybrid`</li>
+      <li>`localnest_get_symbol`</li>
+      <li>`localnest_find_usages`</li>
+    </ul>
+  </div>
+  <div className="docPanel">
+    <h3>Memory</h3>
+    <ul>
+      <li>`localnest_task_context`</li>
+      <li>`localnest_memory_status`</li>
+      <li>`localnest_memory_recall`</li>
+      <li>`localnest_memory_list`</li>
+      <li>`localnest_memory_get`</li>
+      <li>`localnest_memory_store`</li>
+      <li>`localnest_memory_update`</li>
+      <li>`localnest_memory_delete`</li>
+      <li>`localnest_capture_outcome`</li>
+      <li>`localnest_memory_capture_event`</li>
+      <li>`localnest_memory_events`</li>
     </ul>
   </div>
   <div className="docPanel">
@@ -45,6 +64,18 @@
     </ul>
   </div>
 </div>
+
+## Choose by goal
+
+| Goal | Start with | Then use |
+| --- | --- | --- |
+| Find feature/module location | `localnest_search_files` | `localnest_project_tree`, `localnest_read_file` |
+| Find symbol definition/export | `localnest_get_symbol` | `localnest_read_file` |
+| Find symbol call/import usage | `localnest_find_usages` | `localnest_read_file` |
+| Match exact code/symbol | `localnest_search_code` | `localnest_read_file` |
+| Retrieve by concept/intent | `localnest_index_status`, `localnest_index_project` | `localnest_search_hybrid`, `localnest_read_file` |
+| Rehydrate prior context | `localnest_task_context` | `localnest_memory_recall` (if needed) |
+| Capture outcome for future tasks | `localnest_capture_outcome` | `localnest_memory_events` |
 
 ## Response format
 
@@ -57,7 +88,7 @@ Tools support `response_format: "json"` or `"markdown"`.
     <span>1</span>
     <div>
       <strong>Check runtime state</strong>
-      <p>`localnest_server_status` and `localnest_update_status` confirm the active backend and version state.</p>
+      <p>`localnest_server_status`, `localnest_task_context`, and `localnest_update_status` confirm active backend, memory state, relevant recall, and version state.</p>
     </div>
   </div>
   <div className="docStep">
@@ -70,15 +101,29 @@ Tools support `response_format: "json"` or `"markdown"`.
   <div className="docStep">
     <span>3</span>
     <div>
-      <strong>Prepare the index</strong>
-      <p>`localnest_index_status` and `localnest_index_project` make hybrid retrieval useful.</p>
+      <strong>Recall prior context</strong>
+      <p>If memory is enabled, prefer `localnest_task_context` before indexing or deep analysis.</p>
     </div>
   </div>
   <div className="docStep">
     <span>4</span>
     <div>
+      <strong>Prepare the index</strong>
+      <p>`localnest_index_status` and `localnest_index_project` make hybrid retrieval useful.</p>
+    </div>
+  </div>
+  <div className="docStep">
+    <span>5</span>
+    <div>
       <strong>Retrieve and verify</strong>
       <p>`localnest_search_hybrid` narrows candidates, then `localnest_read_file` confirms exact lines.</p>
+    </div>
+  </div>
+  <div className="docStep">
+    <span>6</span>
+    <div>
+      <strong>Capture durable outcomes</strong>
+      <p>After a fix, decision, review, or preference discovery, emit `localnest_capture_outcome` when memory is enabled.</p>
     </div>
   </div>
 </div>

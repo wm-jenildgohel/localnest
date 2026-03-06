@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { WorkspaceService } from '../src/services/workspace-service.js';
+import { WorkspaceService } from '../src/services/workspace/service.js';
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'localnest-workspace-test-'));

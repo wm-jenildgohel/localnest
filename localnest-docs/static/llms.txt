@@ -1,0 +1,14 @@
+# LocalNest MCP Docs
+
+Canonical: https://wmt-mobile.github.io/localnest/
+
+Primary Docs:
+- Getting Started: https://wmt-mobile.github.io/localnest/docs
+- Install: https://wmt-mobile.github.io/localnest/docs/setup/install
+- Configuration: https://wmt-mobile.github.io/localnest/docs/setup/configuration
+- Tools: https://wmt-mobile.github.io/localnest/docs/tools/overview
+- Current Release: https://wmt-mobile.github.io/localnest/docs/releases/current
+
+Repository:
+- https://github.com/wmt-mobile/localnest
+

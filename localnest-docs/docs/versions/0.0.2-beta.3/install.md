@@ -10,7 +10,8 @@
 This beta still uses the same general setup flow:
 
 ```bash
-npm install -g localnest-mcp
+npm install -g localnest-mcp@0.0.2-beta.3
+localnest-mcp-install-skill
 npx -y localnest-mcp-setup
 npx -y localnest-mcp-doctor
 ```
@@ -26,3 +27,5 @@ Global install was becoming the clearer path, but `npx` remained common in docs 
 ## Quick client note
 
 This version is where startup became much more forgiving in restricted environments.
+
+Need another version line? Use [/docs/releases/version-selection](/docs/releases/version-selection).

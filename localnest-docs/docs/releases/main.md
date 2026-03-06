@@ -1,3 +1,7 @@
+---
+description: Main branch release notes for unreleased LocalNest behavior, including update tooling and source-only documentation changes.
+---
+
 # Main Branch
 
 <div className="docPanel docPanel--compact">

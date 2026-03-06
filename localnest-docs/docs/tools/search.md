@@ -49,6 +49,14 @@ Useful parameters:
   <p>Use hybrid search after indexing when you need semantic recall, architecture context, or concept-level lookup.</p>
 </div>
 
+## `localnest_get_symbol`
+
+Use for definition/export lookup when you know the symbol name but not the file.
+
+## `localnest_find_usages`
+
+Use for import/call-site lookup when tracing symbol usage.
+
 ## Recommended flow
 
 <div className="docSteps">
@@ -63,7 +71,7 @@ Useful parameters:
     <span>2</span>
     <div>
       <strong>Search with the right mode</strong>
-      <p>Use `localnest_search_code` for exact terms and `localnest_search_hybrid` for concepts.</p>
+      <p>Use `localnest_get_symbol`/`localnest_find_usages` for symbol tracing, `localnest_search_code` for exact terms, and `localnest_search_hybrid` for concepts.</p>
     </div>
   </div>
   <div className="docStep">
@@ -74,3 +82,14 @@ Useful parameters:
     </div>
   </div>
 </div>
+
+## Fast mode defaults
+
+For lowest latency in daily use:
+
+- Pass `project_path` whenever known.
+- Start with `max_results` in the `20-40` range.
+- Use `context_lines=2` in `localnest_search_code`.
+- Keep `all_roots=false` unless cross-repo search is required.
+- Use `localnest_search_hybrid` only when exact lexical search is not enough.
+- Keep reranker disabled (`use_reranker=false`) until a final precision pass is needed.

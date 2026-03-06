@@ -1,3 +1,7 @@
+---
+description: Overview of LocalNest v0.0.1-beta.1, the first documented beta release with initial semantic indexing and hybrid search capabilities.
+---
+
 # 0.0.1-beta.1 Overview
 
 <div className="docPanel docPanel--compact">
