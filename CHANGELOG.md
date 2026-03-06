@@ -2,8 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
 ## [0.0.4-beta.5] - 2026-03-06
 
 ### Upgrade Notes
